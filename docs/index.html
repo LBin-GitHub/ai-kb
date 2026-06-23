@@ -447,6 +447,7 @@
     .graph-node { cursor: pointer; }
     .graph-node circle { transition: r 0.2s, fill 0.2s; }
     .graph-node:hover circle { fill: #6366f1; filter: drop-shadow(0 2px 6px rgba(79,70,229,0.4)); }
+    .graph-node:hover circle[stroke-dasharray] { fill: #bdbdbd; filter: none; }
     .graph-node text { pointer-events: none; }
     .graph-link { stroke-opacity: 0.45; stroke: #8884d8; }
 
@@ -518,11 +519,21 @@ async function loadData() {
   try {
     const resp = await fetch('data/kb-data.json');
     data = await resp.json();
+    // Mark folder docs (only a title, no real content)
+    for (const doc of data.documents) {
+      doc.isFolder = isFolderDoc(doc);
+    }
     initUI();
   } catch (e) {
     document.getElementById('contentArea').innerHTML =
       '<div class="empty-state"><div class="emoji">📡</div><h2>数据加载失败</h2><p>请先运行 sync.js 同步飞书内容</p></div>';
   }
+}
+
+function isFolderDoc(doc) {
+  if (!doc.content) return true;
+  const body = doc.content.replace(/^#+\s+.*$/gm, '').trim();
+  return body.length === 0;
 }
 
 // ============================================================
@@ -556,16 +567,31 @@ function renderTreeNode(node, parent, depth) {
   const div = document.createElement('div');
   div.className = 'tree-item';
   div.style.paddingLeft = (20 + depth * 16) + 'px';
+
+  const doc = data.documents.find(d => d.id === node.id);
+  const isFolder = node.children && node.children.length > 0 && (!doc || doc.isFolder);
+
   div.onclick = () => {
-    if (node.children && node.children.length > 0) {
+    if (isFolder) {
+      // Folder: just expand/collapse, don't open doc
       const arrow = div.querySelector('.arrow');
       arrow?.classList.toggle('expanded');
       toggleChildren(div);
+    } else if (node.children && node.children.length > 0) {
+      // Doc with children: expand AND open
+      const arrow = div.querySelector('.arrow');
+      arrow?.classList.toggle('expanded');
+      toggleChildren(div);
+      openDoc(node.id);
+    } else {
+      // Leaf doc
+      openDoc(node.id);
     }
-    openDoc(node.id);
   };
 
-  if (node.children && node.children.length > 0) {
+  if (isFolder) {
+    div.innerHTML = `<span class="arrow">▶</span> 📁 ${esc(node.title)}`;
+  } else if (node.children && node.children.length > 0) {
     div.innerHTML = `<span class="arrow">▶</span> ${esc(node.title)}`;
   } else {
     div.innerHTML = `<span class="dot"></span> ${esc(node.title)}`;
@@ -616,12 +642,12 @@ function showDoc(docId) {
 }
 
 function openDoc(docId) {
+  const doc = data.documents.find(d => d.id === docId);
+  if (!doc || doc.isFolder) return; // Don't open folders
+
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
   document.getElementById('btnGraph').classList.remove('active');
   document.getElementById('btnDoc').classList.add('active');
-  // Find the active tree item
-  const items = document.querySelectorAll('.tree-item');
-  // We can't easily match by docId in tree items, but we know which one was clicked
   currentDocId = docId;
   renderDocPage(docId);
 }
@@ -701,41 +727,53 @@ function drawGraph() {
   const nodeEls = nodeData.map((nd, i) => {
     const g = document.createElementNS(svgNS, 'g');
     g.className.baseVal = 'graph-node';
-    g.setAttribute('cursor', 'pointer');
-    g.onclick = () => openDoc(nd.id);
 
-    // Gradient-like effect: outer ring + inner circle
+    const doc = data.documents.find(d => d.id === nd.id);
+    const isFolder = doc && doc.isFolder;
+
+    if (!isFolder) {
+      g.setAttribute('cursor', 'pointer');
+      g.onclick = () => openDoc(nd.id);
+    } else {
+      g.setAttribute('cursor', 'default');
+    }
+
+    const circleColor = isFolder ? '#c7c7c7' : '#4f46e5';
+    const strokeColor = isFolder ? '#b0b0b0' : '#3730a3';
+
     const circle = document.createElementNS(svgNS, 'circle');
     circle.setAttribute('r', nd.radius);
-    circle.setAttribute('fill', '#4f46e5');
-    circle.setAttribute('stroke', '#3730a3');
-    circle.setAttribute('stroke-width', '2.5');
-    circle.setAttribute('opacity', '0.9');
+    circle.setAttribute('fill', circleColor);
+    circle.setAttribute('stroke', strokeColor);
+    circle.setAttribute('stroke-width', isFolder ? '2' : '2.5');
+    circle.setAttribute('stroke-dasharray', isFolder ? '6 3' : 'none');
+    circle.setAttribute('opacity', isFolder ? '0.7' : '0.9');
     g.appendChild(circle);
 
-    const text = document.createElementNS(svgNS, 'text');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dy', '0.3em');
-    text.setAttribute('font-size', nd.radius > 22 ? '13' : '11');
-    text.setAttribute('fill', '#fff');
-    text.setAttribute('font-weight', '700');
-    text.setAttribute('font-family', '-apple-system, sans-serif');
-    text.textContent = nd.title.length > 8 ? nd.title.substring(0, 8) + '…' : nd.title;
-    g.appendChild(text);
+    // Folder icon inside circle
+    if (isFolder) {
+      const icon = document.createElementNS(svgNS, 'text');
+      icon.setAttribute('text-anchor', 'middle');
+      icon.setAttribute('dy', '0.35em');
+      icon.setAttribute('font-size', nd.radius > 22 ? '14' : '12');
+      icon.setAttribute('font-family', '-apple-system, sans-serif');
+      icon.textContent = '📁';
+      g.appendChild(icon);
+    }
 
     // Title label below
     const label = document.createElementNS(svgNS, 'text');
     label.setAttribute('text-anchor', 'middle');
     label.setAttribute('dy', nd.radius + 16);
     label.setAttribute('font-size', '13');
-    label.setAttribute('fill', '#2d2d2d');
-    label.setAttribute('font-weight', '500');
+    label.setAttribute('fill', isFolder ? '#9e9e9e' : '#2d2d2d');
+    label.setAttribute('font-weight', isFolder ? '400' : '500');
     label.setAttribute('font-family', '-apple-system, sans-serif');
     label.textContent = nd.title.length > 12 ? nd.title.substring(0, 12) + '…' : nd.title;
     g.appendChild(label);
 
     nodeGroup.appendChild(g);
-    return { g, nd, circle, text, label };
+    return { g, nd, circle, label };
   });
 
   // Force simulation

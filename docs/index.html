@@ -337,7 +337,7 @@
       pointer-events: none;
     }
     .doc-page.toc-collapsed .doc-toc-toggle {
-      transform: rotate(180deg);
+      left: 316px;
     }
     .doc-content h1 {
       font-size: 28px;
@@ -1026,6 +1026,7 @@ function toggleToc() {
   const btn = document.querySelector('.doc-toc-toggle');
   if (btn) {
     btn.setAttribute('data-tip', tocCollapsed ? '展开目录' : '收起目录');
+    btn.innerHTML = tocCollapsed ? '☰' : '≪';
   }
 }
 
@@ -1342,7 +1343,7 @@ function renderDocPage(docId) {
 
   const tocHTML = `
     <div class="doc-toc">
-      <button class="doc-toc-toggle" onclick="toggleToc()" data-tip="${tocCollapsed ? '展开目录' : '收起目录'}">◀</button>
+      <button class="doc-toc-toggle" onclick="toggleToc()" data-tip="${tocCollapsed ? '展开目录' : '收起目录'}">${tocCollapsed ? '☰' : '≪'}</button>
       <div class="doc-toc-header">
         <h3>📑 文章导航</h3>
       </div>

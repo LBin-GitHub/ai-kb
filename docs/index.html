@@ -457,20 +457,20 @@
       position: fixed;
       bottom: 28px;
       right: 28px;
-      width: 52px;
-      height: 52px;
-      border-radius: 50%;
+      padding: 10px 20px;
+      border-radius: 24px;
       background: var(--accent);
       color: #fff;
       border: none;
-      font-size: 24px;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: var(--font-sans);
       cursor: pointer;
       box-shadow: 0 4px 16px rgba(79,70,229,0.35);
       z-index: 500;
       transition: transform 0.2s, box-shadow 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      white-space: nowrap;
+      letter-spacing: 0.5px;
     }
     .rag-fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(79,70,229,0.45); }
     .rag-panel {
@@ -747,19 +747,14 @@
 </main>
 
 <!-- ===== RAG KNOWLEDGE ASSISTANT ===== -->
-<button class="rag-fab" id="ragFab" onclick="toggleRag()" title="知识助手">
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="8" r="4"/>
-    <path d="M4 20c0-4 4-7 8-7s8 3 8 7"/>
-  </svg>
-</button>
+<button class="rag-fab" id="ragFab" onclick="toggleRag()" title="AI助手">AI助手</button>
 <div class="rag-panel" id="ragPanel">
   <div class="rag-header">
-    <strong>🤖 Abin 知识助手</strong>
+    <strong>🤖 AI助手</strong>
     <button onclick="toggleRag()">✕</button>
   </div>
   <div class="rag-messages" id="ragMessages">
-    <div class="rag-msg assistant">你好！我是基于你飞书AI知识库的助手。问我任何问题，我会从你的知识库中找答案 ✨</div>
+    <div class="rag-msg assistant">你好！我是基于你飞书AI知识库的AI助手，只从你的知识库中查找答案。知识库中没有的内容我会直接告诉你，不会胡编乱造 ✨</div>
   </div>
   <div class="rag-input-area">
     <input type="text" id="ragInput" placeholder="输入问题，如：什么是Token？" onkeydown="if(event.key==='Enter'){event.preventDefault();askRag();}">
@@ -1582,29 +1577,67 @@ function buildRagIndex() {
 function searchRag(query) {
   if (!query || query.trim().length < 2) return [];
   const q = query.toLowerCase().trim();
-  const qWords = q.split(/\s+/).filter(w => w.length >= 2);
+  const qWords = q.split(/\s+/).filter(w => w.length >= 3); // 只考虑3字以上的词，避免停用词干扰
+
+  // 提取关键词作为硬性过滤条件
+  const keywords = extractKeywords(query);
+  const kwLower = keywords.map(k => k.toLowerCase()).filter(k => k.length >= 2);
+
+  // 如果没有提取到有效关键词（非常模糊的问题），必须全句匹配
+  const hasKeywords = kwLower.length > 0;
 
   const scored = ragChunks.map(chunk => {
     const textLower = chunk.text.toLowerCase();
     let score = 0;
-    if (textLower.includes(q)) score += 10;
-    let matchedWords = 0;
-    for (const w of qWords) {
-      if (textLower.includes(w)) { score += 3; matchedWords++; }
+    let keywordMatched = false;
+
+    // 核心规则：关键词精确匹配——最强信号
+    for (const kw of kwLower) {
+      if (textLower.includes(kw)) {
+        score += 12;
+        keywordMatched = true;
+      }
+      // 标题中包含关键词也是强信号
+      if (chunk.docTitle.toLowerCase().includes(kw)) {
+        score += 5;
+        keywordMatched = true;
+      }
     }
-    if (matchedWords === 0) {
+
+    // 整句完全匹配
+    if (q.length >= 3 && textLower.includes(q)) score += 8;
+
+    // 词汇级匹配（仅3字以上）
+    for (const w of qWords) {
+      if (textLower.includes(w)) score += 3;
+      if (chunk.docTitle.toLowerCase().includes(w)) score += 2;
+    }
+
+    // 模糊字符匹配（仅在没有其他匹配时作为兜底）
+    if (score === 0 && q.length >= 4) {
       let qi = 0;
       for (let ti = 0; ti < textLower.length && qi < q.length; ti++) {
         if (textLower[ti] === q[qi]) qi++;
       }
-      if (qi >= q.length * 0.8) score += 1;
+      if (qi >= q.length * 0.9) score += 2; // 提高到90%匹配
     }
-    if (chunk.docTitle.toLowerCase().includes(q)) score += 2;
-    score += Math.min(2, 200 / Math.max(chunk.text.length, 100));
-    return { ...chunk, score };
+
+    return { ...chunk, score, keywordMatched };
   });
 
-  return scored.filter(c => c.score >= 1.5).sort((a, b) => b.score - a.score).slice(0, 5);
+  // 严格过滤：
+  // 1. 如果有提取到关键词，必须有关键词匹配
+  // 2. 分数门槛提高到 5（之前是 1.5，太低了）
+  const minScore = hasKeywords ? 5 : 10;
+
+  let filtered = scored.filter(c => {
+    if (c.score < minScore) return false;
+    // 有明确关键词时，强制要求关键词匹配
+    if (hasKeywords && !c.keywordMatched) return false;
+    return true;
+  });
+
+  return filtered.sort((a, b) => b.score - a.score).slice(0, 5);
 }
 
 function extractDefinitionContent(text, keywords) {
@@ -1800,6 +1833,17 @@ function ragOpenDoc(docId, keywordsStr) {
   openDoc(docId);
 }
 
+function getChatReply(query) {
+  const q = query.trim();
+  if (/^(你好|hi|hello|嗨|hey)/i.test(q)) return '你好！我是基于你飞书AI知识库的AI助手，可以帮你检索知识库中的内容。试试问我「什么是LLM」或「Transformer的原理」吧～';
+  if (/^(你是谁|你是[谁什么])/i.test(q)) return '我是基于你飞书AI知识库的AI助手，只从知识库中查找答案，不会胡编乱造。有AI相关的问题尽管问我！';
+  if (/^(你能|你会)(做什么|干什么|干嘛)/i.test(q)) return '我可以帮你从飞书AI知识库中检索内容。试试：\n• 什么是Transformer？\n• LLM和GPT的区别\n• 介绍一下注意力机制';
+  if (/^(谢谢|多谢|感谢|thanks?)/i.test(q)) return '不客气！有问题随时问我 😊';
+  if (/^(再见|拜拜|bye|goodbye)/i.test(q)) return '再见！需要查知识库的时候随时找我～';
+  if (/^在吗[?？]?$/.test(q)) return '在的！有什么想从知识库中了解的吗？';
+  return '抱歉，这个问题不在我的知识范围。我只从飞书AI知识库中检索答案，试试问我AI相关的问题吧～';
+}
+
 function askRag() {
   const input = document.getElementById('ragInput');
   const query = input.value.trim();
@@ -1813,12 +1857,36 @@ function askRag() {
   input.blur();
   document.getElementById('ragSend').disabled = true;
 
+  // 检测是否为非知识类闲聊（问候、你是谁、能做什么等）
+  const nonKnowledgePatterns = [
+    /^(你好|hi|hello|嗨|hey)[!！。.]?$/i,
+    /^你是谁/i,
+    /^你是[谁什么]/i,
+    /^(你能|你会)(做什么|干什么|干嘛)/i,
+    /^(谢谢|多谢|感谢|thanks?)/i,
+    /^(再见|拜拜|bye|goodbye)/i,
+    /^在吗[?？]?$/,
+    /^(今天|明天|现在)(天气|怎么样|几号|星期几)/i,
+    /^讲个笑话/i,
+    /^你(好|真)(聪明|厉害|棒)/i,
+    /^你(是|有)(人|意识|感情|灵魂)/i,
+  ];
+  const isChat = nonKnowledgePatterns.some(p => p.test(query));
+  if (isChat) {
+    const chatReply = getChatReply(query);
+    messages.innerHTML += `<div class="rag-msg assistant">${chatReply}</div>`;
+    messages.scrollTop = messages.scrollHeight;
+    document.getElementById('ragSend').disabled = false;
+    setTimeout(() => { const inp = document.getElementById('ragInput'); if (inp) { inp.value = ''; inp.focus(); } }, 150);
+    return;
+  }
+
   const results = searchRag(query);
   const keywords = extractKeywords(query);
   const keywordStr = keywords.join(' ');
 
   if (results.length === 0) {
-    messages.innerHTML += `<div class="rag-msg assistant"><span class="no-match">📭 抱歉，我在知识库中没有找到与「${esc(query)}」相关的内容。知识库后续更新后我会自动学习到。</span></div>`;
+    messages.innerHTML += `<div class="rag-msg assistant"><span class="no-match">📭 抱歉，「${esc(query)}」这个内容目前在我的知识库中还没有收录，无法回答。知识库后续更新后我会自动学习到。</span></div>`;
   } else {
     // 按文档去重
     const seenDocIds = new Set();

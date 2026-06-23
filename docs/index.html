@@ -317,6 +317,7 @@
     .doc-content {
       flex: 1;
       max-width: 760px;
+      margin-left: 200px;
       padding: 24px 48px 40px;
     }
     .doc-content h1 {
@@ -652,16 +653,17 @@
 
     /* ===== TOC in doc page ===== */
     .doc-toc {
-      position: sticky;
-      top: 0;
+      position: fixed;
+      top: 56px;
+      left: 280px;
       width: 200px;
-      flex-shrink: 0;
-      max-height: 100vh;
+      height: calc(100vh - 56px);
       overflow-y: auto;
       border-right: 1px solid var(--border);
       padding: 24px 16px 40px;
       background: var(--bg-sidebar);
       font-size: 13px;
+      z-index: 40;
     }
     .doc-toc h3 {
       font-size: 12px;

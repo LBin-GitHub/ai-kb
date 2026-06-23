@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Abin's AI 知识库</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='56' font-size='56'>🧠</text></svg>">
+  <style>
+    :root {
+      --bg: #fafaf8;
+      --bg-card: #ffffff;
+      --bg-sidebar: #f5f4f0;
+      --text: #1a1a1a;
+      --text-muted: #6b6b6b;
+      --text-dim: #999;
+      --border: #e8e6e0;
+      --accent: #4f46e5;
+      --accent-light: #eef2ff;
+      --accent-hover: #4338ca;
+      --node-fill: #818cf8;
+      --node-stroke: #4f46e5;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-lg: 0 4px 24px rgba(0,0,0,0.08);
+      --radius: 10px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'SF Mono', 'Fira Code', Consolas, monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: 280px;
+      min-width: 280px;
+      height: 100vh;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .sidebar-header {
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-header h1 .icon { font-size: 24px; }
+    .sidebar-header .subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 0;
+    }
+    .sidebar-nav .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      padding: 8px 20px;
+      font-weight: 600;
+    }
+    .tree-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 20px;
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      gap: 6px;
+      border-left: 2px solid transparent;
+      user-select: none;
+    }
+    .tree-item:hover {
+      background: var(--accent-light);
+      color: var(--text);
+    }
+    .tree-item.active {
+      color: var(--accent);
+      background: var(--accent-light);
+      border-left-color: var(--accent);
+      font-weight: 500;
+    }
+    .tree-item .arrow {
+      width: 16px;
+      font-size: 10px;
+      flex-shrink: 0;
+      transition: transform 0.15s;
+    }
+    .tree-item .arrow.expanded { transform: rotate(90deg); }
+    .tree-item .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      opacity: 0.5;
+    }
+    .sidebar-footer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* ===== MAIN ===== */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      padding: 12px 24px;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .search-wrapper {
+      flex: 1;
+      max-width: 480px;
+      position: relative;
+    }
+    .search-wrapper input {
+      width: 100%;
+      padding: 8px 14px 8px 36px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg-card);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: var(--font-sans);
+    }
+    .search-wrapper input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+    }
+    .search-wrapper .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .search-results {
+      display: none;
+      position: absolute;
+      top: 42px;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      max-height: 360px;
+      overflow-y: auto;
+      z-index: 200;
+    }
+    .search-results.show { display: block; }
+    .search-result-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      transition: background 0.1s;
+    }
+    .search-result-item:last-child { border-bottom: none; }
+    .search-result-item:hover { background: var(--accent-light); }
+    .search-result-item .result-title {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .search-result-item .result-snippet {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .search-result-item .result-snippet em {
+      background: #fef08a;
+      font-style: normal;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .no-results {
+      padding: 24px 14px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    .view-toggle {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-sidebar);
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .view-toggle button {
+      padding: 6px 12px;
+      border: none;
+      background: none;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      transition: all 0.15s;
+    }
+    .view-toggle button.active {
+      background: var(--bg-card);
+      color: var(--accent);
+      box-shadow: var(--shadow);
+      font-weight: 500;
+    }
+    .last-sync {
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    /* ===== CONTENT AREA ===== */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+    }
+
+    /* Homepage */
+    .homepage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      position: relative;
+    }
+    .homepage .graph-container {
+      width: 100%;
+      max-width: 700px;
+      height: 500px;
+      position: relative;
+    }
+    .homepage .graph-container svg { width: 100%; height: 100%; }
+    .homepage .graph-hint {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: var(--text-dim);
+      background: var(--bg);
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+    .homepage .stats {
+      display: flex;
+      gap: 32px;
+      margin-top: 24px;
+    }
+    .homepage .stat {
+      text-align: center;
+    }
+    .homepage .stat .num {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .homepage .stat .label {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Document page */
+    .doc-page {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+    .doc-content {
+      flex: 1;
+      max-width: 760px;
+      padding: 40px 48px;
+      overflow-y: auto;
+    }
+    .doc-content h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+    .doc-content h2 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-top: 36px;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .doc-content h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-top: 24px;
+      margin-bottom: 8px;
+    }
+    .doc-content p {
+      font-size: 15px;
+      line-height: 1.75;
+      margin-bottom: 14px;
+      color: #333;
+    }
+    .doc-content strong { font-weight: 600; }
+    .doc-content em { font-style: italic; }
+    .doc-content blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 16px 0;
+      padding: 12px 16px;
+      background: var(--accent-light);
+      border-radius: 0 6px 6px 0;
+      font-size: 14px;
+      color: #444;
+    }
+    .doc-content hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+    .doc-content a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid var(--accent-light);
+      transition: border-color 0.15s;
+    }
+    .doc-content a:hover { border-bottom-color: var(--accent); }
+    .doc-content .ai-link {
+      color: var(--accent);
+      cursor: pointer;
+      border-bottom: 1px dashed var(--accent);
+      text-decoration: none;
+    }
+    .doc-content .ai-link:hover {
+      background: var(--accent-light);
+    }
+    .doc-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 24px;
+    }
+    .doc-meta .tag {
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    /* Backlinks panel */
+    .backlinks-panel {
+      width: 240px;
+      min-width: 240px;
+      border-left: 1px solid var(--border);
+      padding: 40px 20px;
+      overflow-y: auto;
+      background: var(--bg-sidebar);
+    }
+    .backlinks-panel h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .backlinks-panel .bl-item {
+      display: block;
+      padding: 6px 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      margin-bottom: 2px;
+      transition: all 0.15s;
+    }
+    .backlinks-panel .bl-item:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+    .backlinks-panel .bl-empty {
+      font-size: 12px;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      padding: 40px;
+      text-align: center;
+    }
+    .empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
+    .empty-state h2 { font-size: 18px; color: var(--text-muted); margin-bottom: 6px; }
+    .empty-state p { font-size: 14px; }
+
+    /* Graph SVG styles */
+    .graph-node { cursor: pointer; }
+    .graph-node circle { transition: r 0.2s, fill 0.2s; }
+    .graph-node:hover circle { filter: brightness(1.1); }
+    .graph-node text { pointer-events: none; }
+    .graph-link { stroke-opacity: 0.3; stroke: #999; }
+
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .topbar { padding: 10px 16px; }
+      .doc-content { padding: 24px 20px; max-width: 100%; }
+      .backlinks-panel { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <h1><span class="icon">🧠</span> AI 知识库</h1>
+    <div class="subtitle">coding.Abin.ai</div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="section-title" onclick="showHome()" style="cursor:pointer;">🏠 知识图谱</div>
+    <div class="section-title">📚 文档目录</div>
+    <div id="docTree"></div>
+  </nav>
+  <div class="sidebar-footer">
+    <span>🔄 <span id="syncStatus">待同步</span></span>
+    <span id="docCount">0 篇</span>
+  </div>
+</aside>
+
+<!-- ===== MAIN ===== -->
+<main class="main">
+  <!-- Top bar with search -->
+  <div class="topbar">
+    <div class="search-wrapper">
+      <span class="search-icon">🔍</span>
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="搜索文档标题或内容..."
+        oninput="handleSearch(this.value)"
+        onfocus="handleSearch(this.value)"
+        onblur="setTimeout(() => hideSearch(), 200)"
+      >
+      <div class="search-results" id="searchResults"></div>
+    </div>
+    <div class="view-toggle">
+      <button id="btnGraph" class="active" onclick="showHome()">图谱</button>
+      <button id="btnDoc" onclick="showDoc()">文档</button>
+    </div>
+    <div class="last-sync" id="lastSync"></div>
+  </div>
+
+  <!-- Content -->
+  <div class="content" id="contentArea">
+    <!-- Dynamically filled -->
+  </div>
+</main>
+
+<script>
+// ============================================================
+// DATA LOADING
+// ============================================================
+let data = null;
+let currentDocId = null;
+
+async function loadData() {
+  try {
+    const resp = await fetch('data/kb-data.json');
+    data = await resp.json();
+    initUI();
+  } catch (e) {
+    document.getElementById('contentArea').innerHTML =
+      '<div class="empty-state"><div class="emoji">📡</div><h2>数据加载失败</h2><p>请先运行 sync.js 同步飞书内容</p></div>';
+  }
+}
+
+// ============================================================
+// UI INITIALIZATION
+// ============================================================
+function initUI() {
+  buildDocTree();
+  showHome();
+  updateStats();
+  document.getElementById('lastSync').textContent =
+    '已同步 ' + new Date(data.generated).toLocaleString('zh-CN');
+  document.getElementById('docCount').textContent = data.documents.length + ' 篇';
+  document.getElementById('syncStatus').textContent = '已同步';
+}
+
+function updateStats() {
+  // Stats displayed in homepage stat cards
+}
+
+function buildDocTree() {
+  const container = document.getElementById('docTree');
+  if (!data.tree || data.tree.length === 0) {
+    container.innerHTML = '<div style="padding:12px 20px;color:var(--text-dim);font-size:13px;">暂无文档</div>';
+    return;
+  }
+  container.innerHTML = '';
+  data.tree.forEach(root => renderTreeNode(root, container, 0));
+}
+
+function renderTreeNode(node, parent, depth) {
+  const div = document.createElement('div');
+  div.className = 'tree-item';
+  div.style.paddingLeft = (20 + depth * 16) + 'px';
+  div.onclick = () => {
+    if (node.children && node.children.length > 0) {
+      const arrow = div.querySelector('.arrow');
+      arrow?.classList.toggle('expanded');
+      toggleChildren(div);
+    }
+    openDoc(node.id);
+  };
+
+  if (node.children && node.children.length > 0) {
+    div.innerHTML = `<span class="arrow">▶</span> ${esc(node.title)}`;
+  } else {
+    div.innerHTML = `<span class="dot"></span> ${esc(node.title)}`;
+  }
+
+  parent.appendChild(div);
+
+  // Children wrapper
+  const childrenWrap = document.createElement('div');
+  childrenWrap.style.display = 'none';
+  parent.appendChild(childrenWrap);
+
+  if (node.children) {
+    node.children.forEach(child => renderTreeNode(child, childrenWrap, depth + 1));
+  }
+}
+
+function toggleChildren(item) {
+  const next = item.nextElementSibling;
+  if (next) {
+    next.style.display = next.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// ============================================================
+// VIEWS
+// ============================================================
+function showHome() {
+  currentDocId = null;
+  document.getElementById('btnGraph').classList.add('active');
+  document.getElementById('btnDoc').classList.remove('active');
+  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+
+  if (!data || data.graph.nodes.length === 0) {
+    document.getElementById('contentArea').innerHTML =
+      '<div class="empty-state"><div class="emoji">🌌</div><h2>知识图谱为空</h2><p>请在飞书中添加内容后重新同步</p></div>';
+    return;
+  }
+  renderHomepage();
+}
+
+function showDoc(docId) {
+  if (!docId && !currentDocId) return;
+  if (docId) currentDocId = docId;
+  document.getElementById('btnGraph').classList.remove('active');
+  document.getElementById('btnDoc').classList.add('active');
+  renderDocPage(currentDocId);
+}
+
+function openDoc(docId) {
+  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('btnGraph').classList.remove('active');
+  document.getElementById('btnDoc').classList.add('active');
+  // Find the active tree item
+  const items = document.querySelectorAll('.tree-item');
+  // We can't easily match by docId in tree items, but we know which one was clicked
+  currentDocId = docId;
+  renderDocPage(docId);
+}
+
+// ============================================================
+// HOMEPAGE - Knowledge Graph
+// ============================================================
+function renderHomepage() {
+  const area = document.getElementById('contentArea');
+  area.innerHTML = `
+    <div class="homepage">
+      <div class="graph-container" id="graphContainer"></div>
+      <div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 点击打开文档</div>
+      <div class="stats">
+        <div class="stat"><div class="num">${data.documents.length}</div><div class="label">文档</div></div>
+        <div class="stat"><div class="num">${data.graph.edges.length}</div><div class="label">链接</div></div>
+        <div class="stat"><div class="num">${data.tree.length}</div><div class="label">分类</div></div>
+      </div>
+    </div>
+  `;
+
+  // Wait for DOM
+  setTimeout(() => drawGraph(), 50);
+}
+
+function drawGraph() {
+  const container = document.getElementById('graphContainer');
+  if (!container) return;
+
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  const nodes = data.graph.nodes;
+  const edges = data.graph.edges;
+
+  // Simple force-directed graph with vanilla JS + SVG
+  // For complex graphs we'd use D3, but for a small KB this works well
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  container.appendChild(svg);
+
+  // Physics simulation state
+  const nodeData = nodes.map((n, i) => ({
+    ...n,
+    x: W/2 + (Math.random() - 0.5) * 200,
+    y: H/2 + (Math.random() - 0.5) * 200,
+    vx: 0, vy: 0,
+    radius: 18 + n.weight * 6,
+  }));
+
+  const linkData = edges.map(e => ({
+    source: nodeData.find(n => n.id === e.source),
+    target: nodeData.find(n => n.id === e.target),
+  })).filter(l => l.source && l.target);
+
+  // SVG group for links
+  const linkGroup = document.createElementNS(svgNS, 'g');
+  svg.appendChild(linkGroup);
+
+  // SVG group for nodes
+  const nodeGroup = document.createElementNS(svgNS, 'g');
+  svg.appendChild(nodeGroup);
+
+  // Create SVG elements
+  const linkEls = linkData.map(l => {
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('stroke', '#c4b5fd');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-opacity', '0.4');
+    linkGroup.appendChild(line);
+    return line;
+  });
+
+  const nodeEls = nodeData.map(nd => {
+    const g = document.createElementNS(svgNS, 'g');
+    g.className.baseVal = 'graph-node';
+    g.setAttribute('cursor', 'pointer');
+    g.onclick = () => openDoc(nd.id);
+
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('r', nd.radius);
+    circle.setAttribute('fill', '#818cf8');
+    circle.setAttribute('stroke', '#4f46e5');
+    circle.setAttribute('stroke-width', '2');
+    circle.setAttribute('opacity', '0.85');
+    g.appendChild(circle);
+
+    const text = document.createElementNS(svgNS, 'text');
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dy', '0.3em');
+    text.setAttribute('font-size', nd.radius > 22 ? '12' : '10');
+    text.setAttribute('fill', '#fff');
+    text.setAttribute('font-weight', '600');
+    text.setAttribute('font-family', '-apple-system, sans-serif');
+    text.textContent = nd.title.length > 8 ? nd.title.substring(0, 8) + '…' : nd.title;
+    g.appendChild(text);
+
+    // Title label below
+    const label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dy', nd.radius + 16);
+    label.setAttribute('font-size', '11');
+    label.setAttribute('fill', '#6b6b6b');
+    label.setAttribute('font-family', '-apple-system, sans-serif');
+    label.textContent = nd.title.length > 12 ? nd.title.substring(0, 12) + '…' : nd.title;
+    g.appendChild(label);
+
+    nodeGroup.appendChild(g);
+    return { g, nd, circle, text, label };
+  });
+
+  // Force simulation
+  const sim = {
+    alpha: 1,
+    centerX: W/2,
+    centerY: H/2,
+    repulsion: 600,
+    attraction: 0.005,
+    damping: 0.85,
+    tick() {
+      if (this.alpha < 0.001) return false;
+      this.alpha *= this.damping;
+
+      // Repulsion between all nodes
+      for (let i = 0; i < nodeData.length; i++) {
+        for (let j = i + 1; j < nodeData.length; j++) {
+          const dx = nodeData[j].x - nodeData[i].x;
+          const dy = nodeData[j].y - nodeData[i].y;
+          const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+          const force = this.repulsion / (dist * dist);
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          nodeData[i].vx -= fx;
+          nodeData[i].vy -= fy;
+          nodeData[j].vx += fx;
+          nodeData[j].vy += fy;
+        }
+      }
+
+      // Attraction along edges
+      for (const link of linkData) {
+        if (!link.source || !link.target) continue;
+        const dx = link.target.x - link.source.x;
+        const dy = link.target.y - link.source.y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const force = (dist - 100) * this.attraction;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        link.source.vx += fx;
+        link.source.vy += fy;
+        link.target.vx -= fx;
+        link.target.vy -= fy;
+      }
+
+      // Center gravity
+      for (const nd of nodeData) {
+        nd.vx += (this.centerX - nd.x) * 0.001;
+        nd.vy += (this.centerY - nd.y) * 0.001;
+      }
+
+      // Apply velocity, clamp position
+      for (const nd of nodeData) {
+        nd.vx *= 0.6;
+        nd.vy *= 0.6;
+        nd.x += nd.vx;
+        nd.y += nd.vy;
+        nd.x = Math.max(nd.radius, Math.min(W - nd.radius, nd.x));
+        nd.y = Math.max(nd.radius, Math.min(H - nd.radius, nd.y));
+      }
+
+      return true;
+    },
+    render() {
+      for (let i = 0; i < linkData.length; i++) {
+        const l = linkData[i];
+        linkEls[i].setAttribute('x1', l.source.x);
+        linkEls[i].setAttribute('y1', l.source.y);
+        linkEls[i].setAttribute('x2', l.target.x);
+        linkEls[i].setAttribute('y2', l.target.y);
+      }
+      for (const el of nodeEls) {
+        el.g.setAttribute('transform', `translate(${el.nd.x},${el.nd.y})`);
+      }
+    }
+  };
+
+  // Run simulation
+  let dragNode = null;
+
+  svg.addEventListener('mousedown', (e) => {
+    const mx = e.offsetX, my = e.offsetY;
+    for (const el of nodeEls) {
+      const dx = mx - el.nd.x, dy = my - el.nd.y;
+      if (Math.sqrt(dx * dx + dy * dy) < el.nd.radius + 8) {
+        dragNode = el;
+        break;
+      }
+    }
+  });
+
+  svg.addEventListener('mousemove', (e) => {
+    if (dragNode) {
+      dragNode.nd.x = e.offsetX;
+      dragNode.nd.y = e.offsetY;
+      sim.render();
+    }
+    svg.style.cursor = dragNode ? 'grabbing' : '';
+  });
+
+  svg.addEventListener('mouseup', () => { dragNode = null; });
+
+  // Zoom with scroll
+  let scale = 1, panX = 0, panY = 0;
+  svg.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    scale *= e.deltaY < 0 ? 1.1 : 0.9;
+    scale = Math.max(0.3, Math.min(3, scale));
+    nodeGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
+    linkGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
+  }, { passive: false });
+
+  function animate() {
+    if (dragNode) {
+      // Pause physics while dragging
+      requestAnimationFrame(animate);
+      return;
+    }
+    const alive = sim.tick();
+    sim.render();
+    if (alive) {
+      requestAnimationFrame(animate);
+    }
+  }
+
+  // Initial layout
+  sim.alpha = 1;
+  animate();
+}
+
+// ============================================================
+// DOCUMENT PAGE
+// ============================================================
+function renderDocPage(docId) {
+  const doc = data.documents.find(d => d.id === docId);
+  if (!doc) {
+    document.getElementById('contentArea').innerHTML =
+      '<div class="empty-state"><div class="emoji">📄</div><h2>文档未找到</h2></div>';
+    return;
+  }
+
+  const backlinks = data.backlinks[docId] || [];
+  const tags = doc.tags || [];
+
+  // Convert markdown-like content to HTML
+  let html = mdToHtml(doc.content);
+
+  // Linkify known document titles
+  for (const d of data.documents) {
+    if (d.id === docId) continue;
+    const title = escRegex(d.title);
+    const regex = new RegExp(`(${title})`, 'g');
+    // Don't replace inside HTML tags
+    html = html.replace(regex, (match, p1) => {
+      return `<span class="ai-link" onclick="openDoc('${d.id}')">${p1}</span>`;
+    });
+  }
+
+  document.getElementById('contentArea').innerHTML = `
+    <div class="doc-page">
+      <div class="doc-content">
+        <h1>${esc(doc.title)}</h1>
+        <div class="doc-meta">
+          ${tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}
+        </div>
+        <div class="doc-body">${html}</div>
+      </div>
+      <div class="backlinks-panel">
+        <h3>🔗 反向链接 (${backlinks.length})</h3>
+        ${backlinks.length === 0
+          ? '<div class="bl-empty">暂无反向链接<br><small>在文档中引用本文标题可建立链接</small></div>'
+          : backlinks.map(bl => `
+            <div class="bl-item" onclick="openDoc('${bl.id}')">
+              ${bl.autoDetected ? '📎 ' : '🔗 '}${esc(bl.title)}
+            </div>
+          `).join('')
+        }
+      </div>
+    </div>
+  `;
+
+  // Highlight active tree item
+  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+}
+
+// Simple markdown to HTML converter
+function mdToHtml(md) {
+  if (!md) return '';
+
+  // If it's XML (starts with <), extract text
+  if (md.trim().startsWith('<')) {
+    md = md
+      .replace(/<title>.*?<\/title>/g, '')
+      .replace(/<[^>]+>/g, '\n')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  const lines = md.split('\n');
+  let result = '';
+  let inList = false;
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+
+    // Headers
+    if (trimmed.startsWith('### ')) {
+      if (inList) { result += '</ul>'; inList = false; }
+      result += `<h3>${esc(trimmed.substring(4))}</h3>`;
+      continue;
+    }
+    if (trimmed.startsWith('## ')) {
+      if (inList) { result += '</ul>'; inList = false; }
+      result += `<h2>${esc(trimmed.substring(3))}</h2>`;
+      continue;
+    }
+    if (trimmed.startsWith('# ')) {
+      if (inList) { result += '</ul>'; inList = false; }
+      // Skip H1 if it matches title (handled separately)
+      continue;
+    }
+
+    // HR
+    if (trimmed.match(/^---+$/)) {
+      if (inList) { result += '</ul>'; inList = false; }
+      result += '<hr>';
+      continue;
+    }
+
+    // Bold text in paragraphs
+    let processed = trimmed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // Empty line
+    if (!processed) {
+      if (inList) { result += '</ul>'; inList = false; }
+      continue;
+    }
+
+    // List items
+    if (processed.match(/^[-*•]\s/)) {
+      if (!inList) { result += '<ul>'; inList = true; }
+      result += `<li>${processed.replace(/^[-*•]\s*/, '')}</li>`;
+      continue;
+    }
+
+    if (inList) { result += '</ul>'; inList = false; }
+
+    // Regular paragraph
+    result += `<p>${processed}</p>`;
+  }
+
+  if (inList) result += '</ul>';
+  return result;
+}
+
+// ============================================================
+// FUZZY SEARCH
+// ============================================================
+function handleSearch(query) {
+  const resultsDiv = document.getElementById('searchResults');
+  if (!query || query.trim().length < 1) {
+    resultsDiv.classList.remove('show');
+    return;
+  }
+
+  const q = query.toLowerCase().trim();
+  const results = [];
+
+  for (const doc of data.documents) {
+    const titleMatch = fuzzyMatch(doc.title.toLowerCase(), q);
+    const contentMatch = fuzzyMatch(doc.content.toLowerCase(), q);
+    
+    if (titleMatch.score > 0.2 || contentMatch.score > 0.3) {
+      // Extract snippet around match
+      let snippet = '';
+      const contentLower = doc.content.toLowerCase();
+      const idx = contentLower.indexOf(q);
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 30);
+        const end = Math.min(doc.content.length, idx + q.length + 60);
+        snippet = (start > 0 ? '...' : '') + doc.content.substring(start, end) + (end < doc.content.length ? '...' : '');
+        // Highlight the match
+        const regex = new RegExp(`(${escRegex(q)})`, 'gi');
+        snippet = esc(snippet).replace(regex, '<em>$1</em>');
+      } else {
+        snippet = doc.summary.substring(0, 100);
+      }
+
+      results.push({
+        doc,
+        score: Math.max(titleMatch.score, contentMatch.score),
+        snippet,
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+
+  if (results.length === 0) {
+    resultsDiv.innerHTML = '<div class="no-results">未找到匹配的文档</div>';
+  } else {
+    resultsDiv.innerHTML = results.map(r => `
+      <div class="search-result-item" onclick="openDoc('${r.doc.id}');hideSearch();">
+        <div class="result-title">${esc(r.doc.title)}</div>
+        <div class="result-snippet">${r.snippet}</div>
+      </div>
+    `).join('');
+  }
+  resultsDiv.classList.add('show');
+}
+
+function hideSearch() {
+  document.getElementById('searchResults').classList.remove('show');
+}
+
+// Simple fuzzy match (substring + Levenshtein-inspired scoring)
+function fuzzyMatch(text, query) {
+  if (!text || !query) return { score: 0 };
+
+  // Exact substring match
+  if (text.includes(query)) {
+    return { score: 0.9 };
+  }
+
+  // Word-by-word matching
+  const queryWords = query.split(/\s+/).filter(w => w.length > 0);
+  const textWords = text.split(/\s+/);
+
+  let score = 0;
+  let matchedChars = 0;
+
+  for (const qw of queryWords) {
+    if (qw.length < 2) continue;
+    // Check if any text word starts with the query
+    for (const tw of textWords) {
+      if (tw.startsWith(qw)) {
+        score += 0.6;
+        matchedChars += qw.length;
+        break;
+      }
+      if (tw.includes(qw)) {
+        score += 0.4;
+        matchedChars += qw.length;
+        break;
+      }
+    }
+    // Character-level fuzzy match
+    if (score === 0) {
+      let qi = 0;
+      for (let ti = 0; ti < text.length && qi < qw.length; ti++) {
+        if (text[ti] === qw[qi]) { qi++; }
+      }
+      if (qi === qw.length) {
+        score += 0.25;
+      } else if (qi >= qw.length * 0.7) {
+        score += 0.15;
+      }
+    }
+  }
+
+  // Normalize
+  const maxScore = queryWords.length * 0.6;
+  return { score: maxScore > 0 ? Math.min(1, score / maxScore) : 0 };
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function escRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadData();
+</script>
+</body>
+</html>

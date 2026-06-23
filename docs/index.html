@@ -271,6 +271,9 @@
       max-width: 700px;
       height: 500px;
       position: relative;
+      background: radial-gradient(ellipse at center, #f0edff 0%, #fafaf8 70%);
+      border-radius: 16px;
+      border: 1px solid #e0dbf0;
     }
     .homepage .graph-container svg { width: 100%; height: 100%; }
     .homepage .graph-hint {
@@ -443,9 +446,9 @@
     /* Graph SVG styles */
     .graph-node { cursor: pointer; }
     .graph-node circle { transition: r 0.2s, fill 0.2s; }
-    .graph-node:hover circle { filter: brightness(1.1); }
+    .graph-node:hover circle { fill: #6366f1; filter: drop-shadow(0 2px 6px rgba(79,70,229,0.4)); }
     .graph-node text { pointer-events: none; }
-    .graph-link { stroke-opacity: 0.3; stroke: #999; }
+    .graph-link { stroke-opacity: 0.45; stroke: #8884d8; }
 
     /* Mobile responsive */
     @media (max-width: 768px) {
@@ -688,33 +691,34 @@ function drawGraph() {
   // Create SVG elements
   const linkEls = linkData.map(l => {
     const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('stroke', '#c4b5fd');
-    line.setAttribute('stroke-width', '1.5');
-    line.setAttribute('stroke-opacity', '0.4');
+    line.setAttribute('stroke', '#8884d8');
+    line.setAttribute('stroke-width', '2');
+    line.setAttribute('stroke-opacity', '0.55');
     linkGroup.appendChild(line);
     return line;
   });
 
-  const nodeEls = nodeData.map(nd => {
+  const nodeEls = nodeData.map((nd, i) => {
     const g = document.createElementNS(svgNS, 'g');
     g.className.baseVal = 'graph-node';
     g.setAttribute('cursor', 'pointer');
     g.onclick = () => openDoc(nd.id);
 
+    // Gradient-like effect: outer ring + inner circle
     const circle = document.createElementNS(svgNS, 'circle');
     circle.setAttribute('r', nd.radius);
-    circle.setAttribute('fill', '#818cf8');
-    circle.setAttribute('stroke', '#4f46e5');
-    circle.setAttribute('stroke-width', '2');
-    circle.setAttribute('opacity', '0.85');
+    circle.setAttribute('fill', '#4f46e5');
+    circle.setAttribute('stroke', '#3730a3');
+    circle.setAttribute('stroke-width', '2.5');
+    circle.setAttribute('opacity', '0.9');
     g.appendChild(circle);
 
     const text = document.createElementNS(svgNS, 'text');
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('dy', '0.3em');
-    text.setAttribute('font-size', nd.radius > 22 ? '12' : '10');
+    text.setAttribute('font-size', nd.radius > 22 ? '13' : '11');
     text.setAttribute('fill', '#fff');
-    text.setAttribute('font-weight', '600');
+    text.setAttribute('font-weight', '700');
     text.setAttribute('font-family', '-apple-system, sans-serif');
     text.textContent = nd.title.length > 8 ? nd.title.substring(0, 8) + '…' : nd.title;
     g.appendChild(text);
@@ -723,8 +727,9 @@ function drawGraph() {
     const label = document.createElementNS(svgNS, 'text');
     label.setAttribute('text-anchor', 'middle');
     label.setAttribute('dy', nd.radius + 16);
-    label.setAttribute('font-size', '11');
-    label.setAttribute('fill', '#6b6b6b');
+    label.setAttribute('font-size', '13');
+    label.setAttribute('fill', '#2d2d2d');
+    label.setAttribute('font-weight', '500');
     label.setAttribute('font-family', '-apple-system, sans-serif');
     label.textContent = nd.title.length > 12 ? nd.title.substring(0, 12) + '…' : nd.title;
     g.appendChild(label);

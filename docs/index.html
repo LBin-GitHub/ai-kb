@@ -569,9 +569,9 @@
 
     /* ===== TOC in doc page ===== */
     .doc-toc {
-      width: 220px;
-      min-width: 220px;
-      border-left: 1px solid var(--border);
+      width: 200px;
+      min-width: 200px;
+      border-right: 1px solid var(--border);
       padding: 40px 16px;
       overflow-y: auto;
       background: var(--bg-sidebar);
@@ -580,6 +580,7 @@
       top: 56px;
       align-self: flex-start;
       max-height: calc(100vh - 56px);
+      order: -1;
     }
     .doc-toc h3 {
       font-size: 12px;
@@ -1152,6 +1153,7 @@ function renderDocPage(docId) {
 
   document.getElementById('contentArea').innerHTML = `
     <div class="doc-page">
+      ${tocHTML}
       <div class="doc-content">
         <h1>${esc(doc.title)}</h1>
         <div class="doc-meta">
@@ -1159,7 +1161,6 @@ function renderDocPage(docId) {
         </div>
         <div class="doc-body" id="docBody">${html}</div>
       </div>
-      ${tocHTML}
       <div class="backlinks-panel">
         <h3>🔗 反向链接 (${backlinks.length})</h3>
         ${backlinks.length === 0

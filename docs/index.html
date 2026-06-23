@@ -554,6 +554,29 @@
       line-height: 1.75;
       margin-bottom: 8px;
     }
+    .rag-msg.assistant .rag-answer-intro {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      line-height: 1.6;
+    }
+    .rag-msg.assistant .rag-answer-section {
+      background: var(--accent-light);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .rag-msg.assistant .rag-answer-heading {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .rag-msg.assistant .rag-answer-body {
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--text);
+    }
     .rag-input-area {
       padding: 10px 14px;
       border-top: 1px solid var(--border);
@@ -1558,30 +1581,52 @@ function searchRag(query) {
   return scored.filter(c => c.score >= 1.5).sort((a, b) => b.score - a.score).slice(0, 5);
 }
 
-function extractRelevantSentences(text, query) {
+function extractRelevantParagraph(text, query) {
   const qWords = query.toLowerCase().trim().split(/\s+/).filter(w => w.length >= 2);
-  const sentences = text.split(/(?<=[。！？；\n])/g).map(s => s.trim()).filter(s => s.length > 8);
+  const qLower = query.toLowerCase().trim();
 
-  // Score each sentence by keyword overlap
-  const scored = sentences.map(s => {
-    const lower = s.toLowerCase();
+  // Split into paragraphs by double newlines or headings
+  const paragraphs = text.split(/\n\n+|(?=\n#{2,3}\s)/).map(p => p.trim()).filter(p => p.length > 20);
+
+  // Score paragraphs by relevance
+  const scored = paragraphs.map(p => {
+    const lower = p.toLowerCase();
     let sScore = 0;
+    // Full query match is strongest
+    if (lower.includes(qLower)) sScore += 10;
+    // Word matches
     for (const w of qWords) {
       if (lower.includes(w)) sScore += 2;
     }
-    if (lower.includes(query.toLowerCase().trim())) sScore += 5;
-    return { text: s, score: sScore };
+    // Prefer paragraphs with definition keywords (helps with "什么是X" queries)
+    const definitionMarkers = ['是', '指', '称为', '定义', '指代', '概念', '全称是', '英文'];
+    for (const marker of definitionMarkers) {
+      if (lower.includes(marker)) sScore += 1;
+    }
+    return { text: p, score: sScore };
   });
 
-  // Take top scoring sentences, preserving original order
   const relevant = scored.filter(s => s.score > 0);
+
   if (relevant.length === 0) {
-    // Fallback: first 200 chars
-    return text.substring(0, 200);
+    // Fallback: first meaningful paragraph
+    const first = paragraphs.find(p => p.length > 50);
+    return first ? esc(first.substring(0, 400)) : '';
   }
 
-  // Pick up to 5 sentences, maintaining order
-  return relevant.slice(0, 5).map(s => s.text).join('');
+  // Take top 3 paragraphs, preserving order
+  return relevant.slice(0, 3).map(s => esc(s.text)).join('<br><br>');
+}
+
+function clearAllHighlights() {
+  document.querySelectorAll('mark.rag-highlight').forEach(m => {
+    const parent = m.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(m.textContent), m);
+      parent.normalize();
+    }
+  });
+  highlightQuery = '';
 }
 
 function toggleRag() {
@@ -1589,6 +1634,8 @@ function toggleRag() {
   panel.classList.toggle('open');
   if (panel.classList.contains('open')) {
     document.getElementById('ragInput').focus();
+  } else {
+    clearAllHighlights();
   }
 }
 
@@ -1604,7 +1651,10 @@ function askRag() {
 
   const messages = document.getElementById('ragMessages');
   messages.innerHTML += `<div class="rag-msg user"><span>${esc(query)}</span></div>`;
+
+  // Clear input immediately
   input.value = '';
+  input.blur();
   document.getElementById('ragSend').disabled = true;
 
   const results = searchRag(query);
@@ -1612,7 +1662,7 @@ function askRag() {
   if (results.length === 0) {
     messages.innerHTML += `<div class="rag-msg assistant"><span class="no-match">📭 抱歉，我在知识库中没有找到与「${esc(query)}」相关的内容。知识库后续更新后我会自动学习到。</span></div>`;
   } else {
-    // Deduplicate by document ID (one source per doc)
+    // Deduplicate by document ID
     const seenDocIds = new Set();
     const deduped = [];
     for (const r of results) {
@@ -1623,33 +1673,41 @@ function askRag() {
     }
     const top = deduped.slice(0, 3);
 
-    // Build answer from extracted sentences
-    let answerText = '';
+    // Build a summarized answer
+    let answerParts = [];
+    answerParts.push(`<div class="rag-answer-intro">根据你的飞书AI知识库，以下是关于「<strong>${esc(query)}</strong>」的内容总结：</div>`);
+
     for (let i = 0; i < top.length; i++) {
       const r = top[i];
-      const extracted = extractRelevantSentences(r.text, query);
-      if (extracted) {
-        // Add a section label from the doc title
-        answerText += (i > 0 ? '\n\n' : '') + '📌 ' + extracted;
+      // Extract full paragraphs (not just sentences) for coherence
+      const relevantContent = extractRelevantParagraph(r.text, query);
+      if (relevantContent) {
+        answerParts.push(
+          `<div class="rag-answer-section">` +
+          `<div class="rag-answer-heading">📖 ${esc(r.docTitle)}</div>` +
+          `<div class="rag-answer-body">${relevantContent}</div>` +
+          `</div>`
+        );
       }
     }
 
-    if (!answerText.trim()) {
-      answerText = '根据知识库内容，未找到足够相关的描述。';
-    }
+    const answerText = answerParts.join('\n');
 
-    // Sources: one per document
     const escapedQuery = query.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const sourcesHTML = top.map((r) =>
       `<div class="source" onclick="ragOpenDoc('${r.docId}', '${escapedQuery}')">📄 ${esc(r.docTitle)}</div>`
     ).join('');
 
-    messages.innerHTML += `<div class="rag-msg assistant"><div class="rag-answer">${esc(answerText).replace(/\n\n/g, '<br><br>')}</div>${sourcesHTML}</div>`;
+    messages.innerHTML += `<div class="rag-msg assistant">${answerText}${sourcesHTML}</div>`;
   }
 
   messages.scrollTop = messages.scrollHeight;
   document.getElementById('ragSend').disabled = false;
-  document.getElementById('ragInput').focus();
+  // Refocus input after response
+  setTimeout(() => {
+    const inp = document.getElementById('ragInput');
+    if (inp) inp.focus();
+  }, 100);
 }
 
 // ============================================================

@@ -439,17 +439,184 @@
       padding: 40px;
       text-align: center;
     }
+    /* ===== RAG Chat Widget ===== */
+    .rag-fab {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(79,70,229,0.35);
+      z-index: 500;
+      transition: transform 0.2s, box-shadow 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .rag-fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(79,70,229,0.45); }
+    .rag-panel {
+      position: fixed;
+      bottom: 92px;
+      right: 28px;
+      width: 380px;
+      max-height: 520px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow-lg);
+      z-index: 500;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .rag-panel.open { display: flex; }
+    .rag-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--accent-light);
+    }
+    .rag-header strong { font-size: 14px; color: var(--accent); }
+    .rag-header button {
+      background: none; border: none; cursor: pointer;
+      font-size: 16px; color: var(--text-dim); padding: 2px 6px;
+    }
+    .rag-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      min-height: 80px;
+      max-height: 340px;
+    }
+    .rag-msg {
+      margin-bottom: 12px;
+      animation: fadeIn 0.25s;
+    }
+    .rag-msg.user { text-align: right; }
+    .rag-msg.user span {
+      background: var(--accent);
+      color: #fff;
+      padding: 8px 14px;
+      border-radius: 14px 14px 4px 14px;
+      display: inline-block;
+      max-width: 85%;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .rag-msg.assistant {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    .rag-msg.assistant .source {
+      display: block;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
+      padding: 4px 8px;
+      background: var(--bg-sidebar);
+      border-radius: 6px;
+      margin-bottom: 2px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .rag-msg.assistant .source:hover { background: var(--accent-light); }
+    .rag-msg.assistant .no-match {
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    .rag-input-area {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+    .rag-input-area input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 14px;
+      outline: none;
+      font-family: var(--font-sans);
+      background: var(--bg);
+    }
+    .rag-input-area input:focus { border-color: var(--accent); }
+    .rag-input-area button {
+      padding: 8px 16px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+    .rag-input-area button:hover { background: var(--accent-hover); }
+    .rag-input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ===== TOC in doc page ===== */
+    .doc-toc {
+      width: 220px;
+      min-width: 220px;
+      border-left: 1px solid var(--border);
+      padding: 40px 16px;
+      overflow-y: auto;
+      background: var(--bg-sidebar);
+      font-size: 13px;
+      position: sticky;
+      top: 56px;
+      align-self: flex-start;
+      max-height: calc(100vh - 56px);
+    }
+    .doc-toc h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .doc-toc .toc-item {
+      display: block;
+      padding: 4px 10px;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 5px;
+      margin-bottom: 2px;
+      transition: all 0.15s;
+      border-left: 2px solid transparent;
+      text-decoration: none;
+      line-height: 1.45;
+    }
+    .doc-toc .toc-item:hover { background: var(--accent-light); color: var(--accent); }
+    .doc-toc .toc-item.toc-h2 { padding-left: 10px; }
+    .doc-toc .toc-item.toc-h3 { padding-left: 24px; font-size: 12px; }
+    .doc-toc .toc-item.toc-active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-light); }
+    @media (max-width: 1024px) { .doc-toc { display: none; } }
+
     .empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
     .empty-state h2 { font-size: 18px; color: var(--text-muted); margin-bottom: 6px; }
     .empty-state p { font-size: 14px; }
 
     /* Graph SVG styles */
     .graph-node { cursor: pointer; }
-    .graph-node circle { transition: r 0.2s, fill 0.2s; }
-    .graph-node:hover circle { fill: #6366f1; filter: drop-shadow(0 2px 6px rgba(79,70,229,0.4)); }
-    .graph-node:hover circle[stroke-dasharray] { fill: #bdbdbd; filter: none; }
-    .graph-node text { pointer-events: none; }
-    .graph-link { stroke-opacity: 0.45; stroke: #8884d8; }
+    .graph-node circle { transition: opacity 0.2s, filter 0.2s; }
+    .graph-node:hover circle { filter: brightness(1.15) drop-shadow(0 2px 8px rgba(0,0,0,0.25)); }
+    .graph-node:hover circle[stroke-dasharray] { filter: none; }
+    .graph-node text { pointer-events: none; user-select: none; }
+    .graph-link { stroke-opacity: 0.45; }
 
     /* Mobile responsive */
     @media (max-width: 768px) {
@@ -508,6 +675,22 @@
   </div>
 </main>
 
+<!-- ===== RAG KNOWLEDGE ASSISTANT ===== -->
+<button class="rag-fab" id="ragFab" onclick="toggleRag()" title="知识助手">💬</button>
+<div class="rag-panel" id="ragPanel">
+  <div class="rag-header">
+    <strong>🤖 Abin 知识助手</strong>
+    <button onclick="toggleRag()">✕</button>
+  </div>
+  <div class="rag-messages" id="ragMessages">
+    <div class="rag-msg assistant">你好！我是基于你飞书AI知识库的助手。问我任何问题，我会从你的知识库中找答案 ✨</div>
+  </div>
+  <div class="rag-input-area">
+    <input type="text" id="ragInput" placeholder="输入问题，如：什么是Token？" onkeydown="if(event.key==='Enter')askRag()">
+    <button id="ragSend" onclick="askRag()">发送</button>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // DATA LOADING
@@ -541,6 +724,7 @@ function isFolderDoc(doc) {
 // ============================================================
 function initUI() {
   buildDocTree();
+  buildRagIndex();
   showHome();
   updateStats();
   document.getElementById('lastSync').textContent =
@@ -660,7 +844,7 @@ function renderHomepage() {
   area.innerHTML = `
     <div class="homepage">
       <div class="graph-container" id="graphContainer"></div>
-      <div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 点击打开文档</div>
+      <div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 实线=层级关系 · 虚线=内容关联 · 点击打开文档</div>
       <div class="stats">
         <div class="stat"><div class="num">${data.documents.length}</div><div class="label">文档</div></div>
         <div class="stat"><div class="num">${data.graph.edges.length}</div><div class="label">链接</div></div>
@@ -679,11 +863,87 @@ function drawGraph() {
 
   const W = container.clientWidth;
   const H = container.clientHeight;
-  const nodes = data.graph.nodes;
-  const edges = data.graph.edges;
+  const pad = 70;
 
-  // Simple force-directed graph with vanilla JS + SVG
-  // For complex graphs we'd use D3, but for a small KB this works well
+  // Build tree-based hierarchy
+  const depthMap = {}; // nodeId -> { depth, parentId, color }
+  const childrenMap = {}; // nodeId -> [childIds]
+
+  function walkTree(nodes, parentId, depth, colorIdx) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const branchColor = depth === 0 ? COLORS[i % COLORS.length] : colorIdx;
+      depthMap[node.id] = {
+        depth,
+        parentId: parentId || null,
+        color: branchColor,
+      };
+      childrenMap[node.id] = (node.children || []).map(c => c.id);
+      if (node.children && node.children.length > 0) {
+        walkTree(node.children, node.id, depth + 1, branchColor);
+      }
+    }
+  }
+
+  const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#0891b2', '#be185d'];
+  walkTree(data.tree, null, 0, 0);
+
+  // Collect all unique node IDs from tree + graph
+  const allIds = new Set();
+  for (const n of data.graph.nodes) allIds.add(n.id);
+  for (const id of Object.keys(depthMap)) allIds.add(id);
+
+  // Compute max depth and width per level
+  const levels = {};
+  let maxDepth = 0;
+  for (const id of allIds) {
+    const d = depthMap[id] || { depth: 0, color: '#999' };
+    if (!levels[d.depth]) levels[d.depth] = [];
+    levels[d.depth].push(id);
+    maxDepth = Math.max(maxDepth, d.depth);
+  }
+
+  const nLevels = Object.keys(levels).length || 1;
+  const layerH = (H - pad * 2) / Math.max(nLevels, 1);
+
+  // Position nodes in layers
+  const positions = {};
+  for (const [depth, ids] of Object.entries(levels)) {
+    const d = parseInt(depth);
+    const y = pad + (d / Math.max(maxDepth, 1)) * (H - pad * 2);
+    const count = ids.length;
+    const layerW = (W - pad * 2);
+    const spacing = layerW / Math.max(count + 1, 1);
+
+    for (let i = 0; i < ids.length; i++) {
+      // Add some horizontal jitter for natural look
+      const jitterX = (Math.random() - 0.5) * 30;
+      const jitterY = (Math.random() - 0.5) * 20;
+      positions[ids[i]] = {
+        x: pad + spacing * (i + 1) + jitterX,
+        y: Math.max(pad, Math.min(H - pad, y + jitterY)),
+        depth: d,
+      };
+    }
+  }
+
+  // Build edge list: tree edges + graph edges
+  const edgeList = [];
+
+  // Tree edges (parent -> child)
+  for (const [parentId, childIds] of Object.entries(childrenMap)) {
+    for (const childId of childIds) {
+      edgeList.push({ source: parentId, target: childId, type: 'tree' });
+    }
+  }
+
+  // Cross-reference edges from graph
+  for (const e of data.graph.edges) {
+    edgeList.push({ source: e.source, target: e.target, type: 'cross' });
+  }
+
+  // Node visuals
+  const nodeSize = (depth) => 28 - depth * 5;
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
@@ -692,174 +952,119 @@ function drawGraph() {
   svg.setAttribute('height', H);
   container.appendChild(svg);
 
-  // Physics simulation state
-  const nodeData = nodes.map((n, i) => ({
-    ...n,
-    x: W/2 + (Math.random() - 0.5) * 200,
-    y: H/2 + (Math.random() - 0.5) * 200,
-    vx: 0, vy: 0,
-    radius: 18 + n.weight * 6,
-  }));
-
-  const linkData = edges.map(e => ({
-    source: nodeData.find(n => n.id === e.source),
-    target: nodeData.find(n => n.id === e.target),
-  })).filter(l => l.source && l.target);
-
-  // SVG group for links
   const linkGroup = document.createElementNS(svgNS, 'g');
   svg.appendChild(linkGroup);
-
-  // SVG group for nodes
   const nodeGroup = document.createElementNS(svgNS, 'g');
   svg.appendChild(nodeGroup);
 
-  // Create SVG elements
-  const linkEls = linkData.map(l => {
-    const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('stroke', '#8884d8');
-    line.setAttribute('stroke-width', '2');
-    line.setAttribute('stroke-opacity', '0.55');
-    linkGroup.appendChild(line);
-    return line;
-  });
+  // Draw links
+  for (const edge of edgeList) {
+    const sp = positions[edge.source];
+    const tp = positions[edge.target];
+    if (!sp || !tp) continue;
 
-  const nodeEls = nodeData.map((nd, i) => {
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', sp.x);
+    line.setAttribute('y1', sp.y);
+    line.setAttribute('x2', tp.x);
+    line.setAttribute('y2', tp.y);
+
+    if (edge.type === 'tree') {
+      line.setAttribute('stroke', '#8884d8');
+      line.setAttribute('stroke-width', '2.5');
+      line.setAttribute('stroke-opacity', '0.55');
+    } else {
+      line.setAttribute('stroke', '#f59e0b');
+      line.setAttribute('stroke-width', '1.5');
+      line.setAttribute('stroke-opacity', '0.35');
+      line.setAttribute('stroke-dasharray', '6 4');
+    }
+    linkGroup.appendChild(line);
+  }
+
+  // Draw nodes
+  const nodeEls = [];
+  for (const [id, pos] of Object.entries(positions)) {
     const g = document.createElementNS(svgNS, 'g');
+    g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
     g.className.baseVal = 'graph-node';
 
-    const doc = data.documents.find(d => d.id === nd.id);
+    const doc = data.documents.find(d => d.id === id);
     const isFolder = doc && doc.isFolder;
+    const dm = depthMap[id] || { depth: 0, color: '#999' };
+
+    const r = isFolder ? 18 - pos.depth * 3 : nodeSize(pos.depth);
 
     if (!isFolder) {
       g.setAttribute('cursor', 'pointer');
-      g.onclick = () => openDoc(nd.id);
+      g.onclick = () => openDoc(id);
     } else {
       g.setAttribute('cursor', 'default');
     }
 
-    const circleColor = isFolder ? '#c7c7c7' : '#4f46e5';
-    const strokeColor = isFolder ? '#b0b0b0' : '#3730a3';
+    // Outer ring (depth indicator)
+    const outerRing = document.createElementNS(svgNS, 'circle');
+    outerRing.setAttribute('r', r + 3);
+    outerRing.setAttribute('fill', 'none');
+    outerRing.setAttribute('stroke', dm.color);
+    outerRing.setAttribute('stroke-width', '1.5');
+    outerRing.setAttribute('stroke-opacity', pos.depth === 0 ? '0.5' : '0.25');
+    g.appendChild(outerRing);
 
+    // Main circle
     const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('r', nd.radius);
-    circle.setAttribute('fill', circleColor);
-    circle.setAttribute('stroke', strokeColor);
-    circle.setAttribute('stroke-width', isFolder ? '2' : '2.5');
-    circle.setAttribute('stroke-dasharray', isFolder ? '6 3' : 'none');
-    circle.setAttribute('opacity', isFolder ? '0.7' : '0.9');
+    circle.setAttribute('r', r);
+    circle.setAttribute('fill', isFolder ? '#e0e0e0' : dm.color);
+    circle.setAttribute('stroke', isFolder ? '#c0c0c0' : dm.color);
+    circle.setAttribute('stroke-width', pos.depth === 0 ? '3' : '2');
+    circle.setAttribute('opacity', isFolder ? '0.6' : pos.depth === 0 ? '0.95' : '0.8');
+    circle.setAttribute('stroke-dasharray', isFolder ? '5 3' : 'none');
     g.appendChild(circle);
 
-    // Folder icon inside circle
     if (isFolder) {
       const icon = document.createElementNS(svgNS, 'text');
       icon.setAttribute('text-anchor', 'middle');
       icon.setAttribute('dy', '0.35em');
-      icon.setAttribute('font-size', nd.radius > 22 ? '14' : '12');
+      icon.setAttribute('font-size', '11');
       icon.setAttribute('font-family', '-apple-system, sans-serif');
       icon.textContent = '📁';
       g.appendChild(icon);
     }
 
-    // Title label below
+    // Label
     const label = document.createElementNS(svgNS, 'text');
     label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('dy', nd.radius + 16);
-    label.setAttribute('font-size', '13');
-    label.setAttribute('fill', isFolder ? '#9e9e9e' : '#2d2d2d');
-    label.setAttribute('font-weight', isFolder ? '400' : '500');
+    label.setAttribute('dy', r + 15);
+    label.setAttribute('font-size', pos.depth === 0 ? '13' : '11');
+    label.setAttribute('fill', pos.depth === 0 ? '#1a1a1a' : '#4a4a4a');
+    label.setAttribute('font-weight', pos.depth === 0 ? '600' : '400');
     label.setAttribute('font-family', '-apple-system, sans-serif');
-    label.textContent = nd.title.length > 12 ? nd.title.substring(0, 12) + '…' : nd.title;
+    const docTitle = doc ? doc.title : id;
+    label.textContent = docTitle.length > 14 ? docTitle.substring(0, 13) + '…' : docTitle;
     g.appendChild(label);
 
     nodeGroup.appendChild(g);
-    return { g, nd, circle, label };
-  });
+    nodeEls.push({ g, id, pos, r });
+  }
 
-  // Force simulation
-  const sim = {
-    alpha: 1,
-    centerX: W/2,
-    centerY: H/2,
-    repulsion: 600,
-    attraction: 0.005,
-    damping: 0.85,
-    tick() {
-      if (this.alpha < 0.001) return false;
-      this.alpha *= this.damping;
+  // Drag + zoom
+  let dragNode = null, dragOffX = 0, dragOffY = 0;
+  let scale = 1, panX = 0, panY = 0;
 
-      // Repulsion between all nodes
-      for (let i = 0; i < nodeData.length; i++) {
-        for (let j = i + 1; j < nodeData.length; j++) {
-          const dx = nodeData[j].x - nodeData[i].x;
-          const dy = nodeData[j].y - nodeData[i].y;
-          const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-          const force = this.repulsion / (dist * dist);
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          nodeData[i].vx -= fx;
-          nodeData[i].vy -= fy;
-          nodeData[j].vx += fx;
-          nodeData[j].vy += fy;
-        }
-      }
-
-      // Attraction along edges
-      for (const link of linkData) {
-        if (!link.source || !link.target) continue;
-        const dx = link.target.x - link.source.x;
-        const dy = link.target.y - link.source.y;
-        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
-        const force = (dist - 100) * this.attraction;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        link.source.vx += fx;
-        link.source.vy += fy;
-        link.target.vx -= fx;
-        link.target.vy -= fy;
-      }
-
-      // Center gravity
-      for (const nd of nodeData) {
-        nd.vx += (this.centerX - nd.x) * 0.001;
-        nd.vy += (this.centerY - nd.y) * 0.001;
-      }
-
-      // Apply velocity, clamp position
-      for (const nd of nodeData) {
-        nd.vx *= 0.6;
-        nd.vy *= 0.6;
-        nd.x += nd.vx;
-        nd.y += nd.vy;
-        nd.x = Math.max(nd.radius, Math.min(W - nd.radius, nd.x));
-        nd.y = Math.max(nd.radius, Math.min(H - nd.radius, nd.y));
-      }
-
-      return true;
-    },
-    render() {
-      for (let i = 0; i < linkData.length; i++) {
-        const l = linkData[i];
-        linkEls[i].setAttribute('x1', l.source.x);
-        linkEls[i].setAttribute('y1', l.source.y);
-        linkEls[i].setAttribute('x2', l.target.x);
-        linkEls[i].setAttribute('y2', l.target.y);
-      }
-      for (const el of nodeEls) {
-        el.g.setAttribute('transform', `translate(${el.nd.x},${el.nd.y})`);
-      }
-    }
-  };
-
-  // Run simulation
-  let dragNode = null;
+  function applyTransform() {
+    nodeGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
+    linkGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
+  }
 
   svg.addEventListener('mousedown', (e) => {
-    const mx = e.offsetX, my = e.offsetY;
+    const mx = (e.offsetX - panX) / scale;
+    const my = (e.offsetY - panY) / scale;
     for (const el of nodeEls) {
-      const dx = mx - el.nd.x, dy = my - el.nd.y;
-      if (Math.sqrt(dx * dx + dy * dy) < el.nd.radius + 8) {
+      const dx = mx - el.pos.x, dy = my - el.pos.y;
+      if (Math.sqrt(dx * dx + dy * dy) < el.r + 10) {
         dragNode = el;
+        dragOffX = dx;
+        dragOffY = dy;
         break;
       }
     }
@@ -867,41 +1072,36 @@ function drawGraph() {
 
   svg.addEventListener('mousemove', (e) => {
     if (dragNode) {
-      dragNode.nd.x = e.offsetX;
-      dragNode.nd.y = e.offsetY;
-      sim.render();
+      dragNode.pos.x = (e.offsetX - panX) / scale - dragOffX;
+      dragNode.pos.y = (e.offsetY - panY) / scale - dragOffY;
+      dragNode.g.setAttribute('transform', `translate(${dragNode.pos.x},${dragNode.pos.y})`);
+      // Update lines touching this node
+      const lines = linkGroup.querySelectorAll('line');
+      let li = 0;
+      for (const edge of edgeList) {
+        if (edge.source === dragNode.id || edge.target === dragNode.id) {
+          const sp = positions[edge.source];
+          const tp = positions[edge.target];
+          if (sp && tp && lines[li]) {
+            lines[li].setAttribute('x1', sp.x); lines[li].setAttribute('y1', sp.y);
+            lines[li].setAttribute('x2', tp.x); lines[li].setAttribute('y2', tp.y);
+          }
+        }
+        li++;
+      }
     }
     svg.style.cursor = dragNode ? 'grabbing' : '';
   });
 
   svg.addEventListener('mouseup', () => { dragNode = null; });
 
-  // Zoom with scroll
-  let scale = 1, panX = 0, panY = 0;
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
-    scale *= e.deltaY < 0 ? 1.1 : 0.9;
-    scale = Math.max(0.3, Math.min(3, scale));
-    nodeGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
-    linkGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
+    const zoom = e.deltaY < 0 ? 1.1 : 0.9;
+    scale *= zoom;
+    scale = Math.max(0.25, Math.min(4, scale));
+    applyTransform();
   }, { passive: false });
-
-  function animate() {
-    if (dragNode) {
-      // Pause physics while dragging
-      requestAnimationFrame(animate);
-      return;
-    }
-    const alive = sim.tick();
-    sim.render();
-    if (alive) {
-      requestAnimationFrame(animate);
-    }
-  }
-
-  // Initial layout
-  sim.alpha = 1;
-  animate();
 }
 
 // ============================================================
@@ -918,19 +1118,37 @@ function renderDocPage(docId) {
   const backlinks = data.backlinks[docId] || [];
   const tags = doc.tags || [];
 
-  // Convert markdown-like content to HTML
-  let html = mdToHtml(doc.content);
+  // Convert markdown to HTML
+  let html = mdToHtmlWithIds(doc.content);
+
+  // Extract TOC from headings
+  const toc = extractTOC(doc.content);
 
   // Linkify known document titles
   for (const d of data.documents) {
     if (d.id === docId) continue;
     const title = escRegex(d.title);
     const regex = new RegExp(`(${title})`, 'g');
-    // Don't replace inside HTML tags
     html = html.replace(regex, (match, p1) => {
       return `<span class="ai-link" onclick="openDoc('${d.id}')">${p1}</span>`;
     });
   }
+
+  const tocHTML = toc.length > 0 ? `
+    <div class="doc-toc">
+      <h3>📑 文章导航</h3>
+      ${toc.map((h, i) => `
+        <div class="toc-item toc-h${h.level}" onclick="scrollToHeading('h-${i}')" id="toc-h-${i}">
+          ${esc(h.title)}
+        </div>
+      `).join('')}
+    </div>
+  ` : `
+    <div class="doc-toc">
+      <h3>📑 文章导航</h3>
+      <div style="color:var(--text-dim);font-size:12px;">暂无标题结构</div>
+    </div>
+  `;
 
   document.getElementById('contentArea').innerHTML = `
     <div class="doc-page">
@@ -939,8 +1157,9 @@ function renderDocPage(docId) {
         <div class="doc-meta">
           ${tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}
         </div>
-        <div class="doc-body">${html}</div>
+        <div class="doc-body" id="docBody">${html}</div>
       </div>
+      ${tocHTML}
       <div class="backlinks-panel">
         <h3>🔗 反向链接 (${backlinks.length})</h3>
         ${backlinks.length === 0
@@ -955,82 +1174,117 @@ function renderDocPage(docId) {
     </div>
   `;
 
-  // Highlight active tree item
+  // TOC scroll spy
+  setTimeout(() => {
+    const docBody = document.getElementById('docBody');
+    if (docBody) {
+      docBody.addEventListener('scroll', updateTocActive);
+    }
+    // Also listen on the content area scroll
+    const contentArea = document.getElementById('contentArea');
+    if (contentArea) {
+      contentArea.addEventListener('scroll', updateTocActive);
+    }
+  }, 100);
+
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
 }
 
-// Simple markdown to HTML converter
-function mdToHtml(md) {
-  if (!md) return '';
+function extractTOC(content) {
+  if (!content) return [];
+  const toc = [];
+  // Clean XML if needed
+  let c = content;
+  if (c.trim().startsWith('<')) {
+    c = c.replace(/<title>.*?<\/title>/g, '').replace(/<[^>]+>/g, '\n');
+  }
+  const lines = c.split('\n');
+  for (const line of lines) {
+    const m2 = line.match(/^##\s+(.+)/);
+    if (m2) { toc.push({ level: 2, title: m2[1].trim() }); continue; }
+    const m3 = line.match(/^###\s+(.+)/);
+    if (m3) { toc.push({ level: 3, title: m3[1].trim() }); continue; }
+  }
+  return toc;
+}
 
-  // If it's XML (starts with <), extract text
-  if (md.trim().startsWith('<')) {
-    md = md
-      .replace(/<title>.*?<\/title>/g, '')
-      .replace(/<[^>]+>/g, '\n')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+function mdToHtmlWithIds(md) {
+  if (!md) return '';
+  let c = md;
+  if (c.trim().startsWith('<')) {
+    c = c.replace(/<title>.*?<\/title>/g, '').replace(/<[^>]+>/g, '\n')
+         .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+         .replace(/&quot;/g, '"').replace(/\n{3,}/g, '\n\n').trim();
   }
 
-  const lines = md.split('\n');
+  const lines = c.split('\n');
   let result = '';
   let inList = false;
+  let hCount = 0;
 
   for (let line of lines) {
     const trimmed = line.trim();
 
-    // Headers
     if (trimmed.startsWith('### ')) {
       if (inList) { result += '</ul>'; inList = false; }
-      result += `<h3>${esc(trimmed.substring(4))}</h3>`;
+      result += `<h3 id="h-${hCount++}">${esc(trimmed.substring(4))}</h3>`;
       continue;
     }
     if (trimmed.startsWith('## ')) {
       if (inList) { result += '</ul>'; inList = false; }
-      result += `<h2>${esc(trimmed.substring(3))}</h2>`;
+      result += `<h2 id="h-${hCount++}">${esc(trimmed.substring(3))}</h2>`;
       continue;
     }
     if (trimmed.startsWith('# ')) {
       if (inList) { result += '</ul>'; inList = false; }
-      // Skip H1 if it matches title (handled separately)
+      // H1 equals doc title, but still assign id for scroll
+      result += `<h1 id="h-${hCount++}">${esc(trimmed.substring(2))}</h1>`;
       continue;
     }
-
-    // HR
     if (trimmed.match(/^---+$/)) {
       if (inList) { result += '</ul>'; inList = false; }
       result += '<hr>';
       continue;
     }
 
-    // Bold text in paragraphs
     let processed = trimmed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-
-    // Empty line
     if (!processed) {
       if (inList) { result += '</ul>'; inList = false; }
       continue;
     }
-
-    // List items
     if (processed.match(/^[-*•]\s/)) {
       if (!inList) { result += '<ul>'; inList = true; }
       result += `<li>${processed.replace(/^[-*•]\s*/, '')}</li>`;
       continue;
     }
-
     if (inList) { result += '</ul>'; inList = false; }
-
-    // Regular paragraph
     result += `<p>${processed}</p>`;
   }
-
   if (inList) result += '</ul>';
   return result;
+}
+
+function scrollToHeading(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Update active TOC item
+    document.querySelectorAll('.toc-item').forEach(item => item.classList.remove('toc-active'));
+    document.getElementById('toc-' + id)?.classList.add('toc-active');
+  }
+}
+
+function updateTocActive() {
+  const headings = document.querySelectorAll('[id^="h-"]');
+  if (headings.length === 0) return;
+  let currentId = headings[0].id;
+  for (const h of headings) {
+    const rect = h.getBoundingClientRect();
+    if (rect.top <= 120) { currentId = h.id; }
+  }
+  document.querySelectorAll('.toc-item').forEach(item => {
+    item.classList.toggle('toc-active', item.id === 'toc-' + currentId);
+  });
 }
 
 // ============================================================
@@ -1154,6 +1408,135 @@ function esc(str) {
 
 function escRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ============================================================
+// RAG KNOWLEDGE ASSISTANT
+// ============================================================
+let ragChunks = [];
+
+function buildRagIndex() {
+  ragChunks = [];
+  for (const doc of data.documents) {
+    if (doc.isFolder) continue;
+    // Clean content
+    let content = doc.content;
+    if (content.trim().startsWith('<')) {
+      content = content.replace(/<title>.*?<\/title>/g, '').replace(/<[^>]+>/g, '\n');
+    }
+    // Split by double newlines into paragraphs
+    const paragraphs = content.split(/\n\n+/).map(p => p.trim()).filter(p => p.length > 30);
+    for (const para of paragraphs) {
+      ragChunks.push({ text: para, docTitle: doc.title, docId: doc.id });
+    }
+    // Also split by headings for better coverage
+    const sections = content.split(/\n(?=#{1,3}\s)/);
+    for (const sec of sections) {
+      const trimmed = sec.trim();
+      if (trimmed.length > 50 && !ragChunks.some(c => c.text === trimmed)) {
+        ragChunks.push({ text: trimmed, docTitle: doc.title, docId: doc.id });
+      }
+    }
+  }
+}
+
+function searchRag(query) {
+  if (!query || query.trim().length < 2) return [];
+  const q = query.toLowerCase().trim();
+  const qWords = q.split(/\s+/).filter(w => w.length >= 2);
+
+  const scored = ragChunks.map(chunk => {
+    const textLower = chunk.text.toLowerCase();
+    let score = 0;
+
+    // Exact phrase match (highest weight)
+    if (textLower.includes(q)) score += 10;
+
+    // Word matches
+    let matchedWords = 0;
+    for (const w of qWords) {
+      if (textLower.includes(w)) { score += 3; matchedWords++; }
+    }
+
+    // Character-level fuzzy match for Chinese
+    if (matchedWords === 0) {
+      let qi = 0;
+      for (let ti = 0; ti < textLower.length && qi < q.length; ti++) {
+        if (textLower[ti] === q[qi]) qi++;
+      }
+      if (qi >= q.length * 0.8) score += 1;
+    }
+
+    // Title match bonus
+    if (chunk.docTitle.toLowerCase().includes(q)) score += 2;
+
+    // Prefer shorter, more focused chunks
+    score += Math.min(2, 200 / Math.max(chunk.text.length, 100));
+
+    return { ...chunk, score };
+  });
+
+  return scored.filter(c => c.score >= 1.5).sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+function toggleRag() {
+  const panel = document.getElementById('ragPanel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) {
+    document.getElementById('ragInput').focus();
+  }
+}
+
+function askRag() {
+  const input = document.getElementById('ragInput');
+  const query = input.value.trim();
+  if (!query) return;
+
+  const messages = document.getElementById('ragMessages');
+  // Add user message
+  messages.innerHTML += `<div class="rag-msg user"><span>${esc(query)}</span></div>`;
+  input.value = '';
+  document.getElementById('ragSend').disabled = true;
+
+  // Search
+  const results = searchRag(query);
+
+  let answer = '';
+  if (results.length === 0) {
+    answer = '<div class="rag-msg assistant"><span class="no-match">📭 抱歉，我在知识库中没有找到与「' + esc(query) + '」相关的内容。知识库后续更新后我会自动学习到。</span></div>';
+  } else {
+    // Remove near-duplicates
+    const seen = new Set();
+    const deduped = [];
+    for (const r of results) {
+      const hash = r.text.substring(0, 60);
+      if (!seen.has(hash)) { seen.add(hash); deduped.push(r); }
+    }
+    const top = deduped.slice(0, 3);
+
+    let answerText = '';
+    for (const r of top) {
+      // Truncate very long chunks
+      let display = r.text;
+      if (display.length > 500) {
+        // Try to break at sentence boundary
+        const cut = display.lastIndexOf('。', 480);
+        display = cut > 300 ? display.substring(0, cut + 1) + '...' : display.substring(0, 480) + '...';
+      }
+      answerText += display + '\n\n';
+    }
+
+    const sourcesHTML = top.map((r, i) =>
+      `<div class="source" onclick="openDoc('${r.docId}')">📄 ${esc(r.docTitle)}</div>`
+    ).join('');
+
+    answer = `<div class="rag-msg assistant">${esc(answerText).replace(/\n\n/g, '<br><br>')}${sourcesHTML}</div>`;
+  }
+
+  messages.innerHTML += answer;
+  messages.scrollTop = messages.scrollHeight;
+  document.getElementById('ragSend').disabled = false;
+  document.getElementById('ragInput').focus();
 }
 
 // ============================================================

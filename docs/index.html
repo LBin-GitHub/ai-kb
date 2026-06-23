@@ -896,16 +896,21 @@ function buildDocTree() {
     return;
   }
   container.innerHTML = '';
-  data.tree.forEach(root => renderTreeNode(root, container, 0));
+  // Count real docs (non-folder, with content)
+  const realDocCount = data.documents.filter(d => d.content && !d.isFolder).length;
+  const expandAll = realDocCount < 15;
+  data.tree.forEach(root => renderTreeNode(root, container, 0, expandAll));
 }
 
-function renderTreeNode(node, parent, depth) {
+function renderTreeNode(node, parent, depth, expandAll) {
   const div = document.createElement('div');
   div.className = 'tree-item';
   div.style.paddingLeft = (20 + depth * 16) + 'px';
 
   const doc = data.documents.find(d => d.id === node.id);
   const isFolder = node.children && node.children.length > 0 && (!doc || doc.isFolder);
+  const hasKids = node.children && node.children.length > 0;
+  const expanded = expandAll && hasKids;
 
   div.onclick = () => {
     if (isFolder) {
@@ -926,9 +931,9 @@ function renderTreeNode(node, parent, depth) {
   };
 
   if (isFolder) {
-    div.innerHTML = `<span class="arrow">▶</span> 📁 ${esc(node.title)}`;
+    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span> 📁 ${esc(node.title)}`;
   } else if (node.children && node.children.length > 0) {
-    div.innerHTML = `<span class="arrow">▶</span> ${esc(node.title)}`;
+    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span> ${esc(node.title)}`;
   } else {
     div.innerHTML = `<span class="dot"></span> ${esc(node.title)}`;
   }
@@ -937,11 +942,11 @@ function renderTreeNode(node, parent, depth) {
 
   // Children wrapper
   const childrenWrap = document.createElement('div');
-  childrenWrap.style.display = 'none';
+  childrenWrap.style.display = expanded ? 'block' : 'none';
   parent.appendChild(childrenWrap);
 
   if (node.children) {
-    node.children.forEach(child => renderTreeNode(child, childrenWrap, depth + 1));
+    node.children.forEach(child => renderTreeNode(child, childrenWrap, depth + 1, expandAll));
   }
 }
 

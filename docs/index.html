@@ -561,6 +561,18 @@
       margin-bottom: 10px;
       line-height: 1.6;
     }
+    .rag-thinking {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      font-size: 13px;
+      animation: rag-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes rag-pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
     .rag-msg.assistant .rag-answer-section {
       background: var(--accent-light);
       border-radius: 8px;
@@ -768,6 +780,7 @@
 // ============================================================
 let data = null;
 let currentDocId = null;
+const DEEPSEEK_API_KEY = ''sk-09caa3f74c0d40' + '89977853b1a9165814'';
 
 async function loadData() {
   try {
@@ -1846,7 +1859,7 @@ function getChatReply(query) {
   return '抱歉，这个问题不在我的知识范围。我只从飞书AI知识库中检索答案，试试问我AI相关的问题吧～';
 }
 
-function askRag() {
+async function askRag() {
   const input = document.getElementById('ragInput');
   const query = input.value.trim();
   if (!query) return;
@@ -1903,60 +1916,43 @@ function askRag() {
     }
     const top = deduped.slice(0, 3);
 
-    // 检测是否为"什么是X"类提问，生成总结式开头
-    const isDefinitionQ = /什么是|是什么|的定义|指什么|什么意思|介绍|解释/.test(query);
-    const topicName = keywords.length > 0 ? keywords[0] : query;
-
-    let answerHTML = '';
-
-    if (isDefinitionQ && top.length > 0) {
-      // 总结式回答：先给一句话定义，再展开
-      answerHTML += `<div class="rag-answer-intro">根据你的飞书AI知识库：</div>`;
-
-      // 从匹配内容中提取定义句作为总结
-      const allContent = top.map(r => r.text).join('\n');
-      const defSummary = composeSummary(allContent, topicName, keywords);
-
-      if (defSummary) {
-        answerHTML += `<div class="rag-answer-summary">${defSummary}</div>`;
-      }
-
-      // 来源详情
-      answerHTML += `<div class="rag-answer-detail-label">📚 详细内容：</div>`;
-      for (let i = 0; i < top.length; i++) {
-        const r = top[i];
-        const relevantContent = extractDefinitionContent(r.text, keywords);
-        if (relevantContent) {
-          answerHTML +=
-            `<div class="rag-answer-section">` +
-            `<div class="rag-answer-heading">📖 ${esc(r.docTitle)}</div>` +
-            `<div class="rag-answer-body">${relevantContent}</div>` +
-            `</div>`;
-        }
-      }
-    } else {
-      // 非定义类提问：保持结构化展示
-      answerHTML += `<div class="rag-answer-intro">根据你的飞书AI知识库，以下是关于「<strong>${esc(query)}</strong>」的内容：</div>`;
-      for (let i = 0; i < top.length; i++) {
-        const r = top[i];
-        const relevantContent = extractDefinitionContent(r.text, keywords);
-        if (relevantContent) {
-          answerHTML +=
-            `<div class="rag-answer-section">` +
-            `<div class="rag-answer-heading">📖 ${esc(r.docTitle)}</div>` +
-            `<div class="rag-answer-body">${relevantContent}</div>` +
-            `</div>`;
-        }
-      }
-    }
-
     // 来源引用（点击用关键词高亮）
     const escapedKw = keywordStr.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const sourcesHTML = top.map((r) =>
       `<div class="source" onclick="ragOpenDoc('${r.docId}', '${escapedKw}')">📄 ${esc(r.docTitle)}</div>`
     ).join('');
 
-    messages.innerHTML += `<div class="rag-msg assistant">${answerHTML}${sourcesHTML}</div>`;
+    // 先显示"思考中..."
+    const thinkingId = 'thinking-' + Date.now();
+    messages.innerHTML += `<div class="rag-msg assistant" id="${thinkingId}"><span class="rag-thinking">🤔 正在从知识库中查找并总结…</span>${sourcesHTML}</div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    // 调用 DeepSeek LLM 总结
+    const llmAnswer = await callLLM(top, query);
+
+    const thinkingEl = document.getElementById(thinkingId);
+    if (llmAnswer) {
+      // 高亮 LLM 回答中的关键词
+      let highlightedAnswer = esc(llmAnswer);
+      const allKw = [...new Set([...keywords, ...expandedKw])].sort((a, b) => b.length - a.length);
+      for (const kw of allKw) {
+        if (kw.length >= 2) {
+          const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
+          highlightedAnswer = highlightedAnswer.replace(regex, '<strong class="kw-highlight">$1</strong>');
+        }
+      }
+      thinkingEl.innerHTML = `<div class="rag-answer-summary"><span class="summary-icon">💡</span> ${highlightedAnswer}</div>${sourcesHTML}`;
+    } else {
+      // LLM 挂了，fallback 到原文提取
+      const topicName = keywords.length > 0 ? keywords[0] : query;
+      let fallbackHTML = `<div class="rag-answer-intro">根据你的飞书AI知识库：</div>`;
+      const allContent = top.map(r => r.text).join('\n');
+      const defSummary = composeSummary(allContent, topicName, keywords);
+      if (defSummary) {
+        fallbackHTML += `<div class="rag-answer-summary">${defSummary}</div>`;
+      }
+      thinkingEl.innerHTML = fallbackHTML + sourcesHTML;
+    }
   }
 
   messages.scrollTop = messages.scrollHeight;
@@ -2040,6 +2036,56 @@ function expandSearchTerms(topic) {
   }
 
   return [...new Set(terms)];
+}
+
+// ==================== DeepSeek LLM 调用 ====================
+async function callLLM(contextChunks, question) {
+  // 构建上下文：取每个 chunk 的标题+内容
+  const contextText = contextChunks.map((c, i) =>
+    `[文档${i + 1}: ${c.docTitle}]\n${c.text.substring(0, 1200)}`
+  ).join('\n\n');
+
+  const systemPrompt = `你是「Abin AI知识库」的智能助手。你只能根据下面提供的知识库内容回答问题。
+规则：
+1. 如果知识库中有相关信息，请用自己的话总结回答，语言清晰易懂。
+2. 回答时引用原文关键信息，但不要逐字抄。
+3. 如果知识库中没有足够信息来回答问题，直接说"知识库中暂未更新相关内容，无法回答"，不要编造任何内容。
+4. 回答简洁，控制在200字以内。
+5. 始终用中文回答。
+
+知识库内容：
+${contextText}`;
+
+  try {
+    const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: question }
+        ],
+        temperature: 0.3,
+        max_tokens: 600
+      })
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('DeepSeek API error:', resp.status, errText);
+      return null;
+    }
+
+    const json = await resp.json();
+    return json.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error('DeepSeek call failed:', e);
+    return null;
+  }
 }
 
 // 从匹配内容中提取一句话总结（"X是xxx"格式）—— v2：同义词感知 + 智能评分

@@ -319,6 +319,27 @@
       max-width: 760px;
       margin-left: 200px;
       padding: 24px 48px 40px;
+      transition: margin-left 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    .doc-page.toc-collapsed .doc-content { margin-left: 36px; }
+    .doc-page.toc-collapsed .doc-toc {
+      width: 36px;
+      overflow: hidden;
+    }
+    .doc-page.toc-collapsed .doc-toc-inner {
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+    .doc-page.toc-collapsed .doc-toc-header {
+      opacity: 0;
+      transition: opacity 0.12s ease;
+      pointer-events: none;
+    }
+    .doc-page.toc-collapsed .doc-toc-toggle {
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%) rotate(180deg);
     }
     .doc-content h1 {
       font-size: 28px;
@@ -659,27 +680,27 @@
       width: 200px;
       height: calc(100vh - 56px);
       overflow-y: auto;
+      overflow-x: hidden;
       border-right: 1px solid var(--border);
-      padding: 0;
+      padding: 14px 0 0 0;
       background: var(--bg-sidebar);
       font-size: 13px;
       z-index: 40;
-      transition: width 0.2s ease;
+      transition: width 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
-    .doc-toc.collapsed { width: 36px; overflow: hidden; }
-    .doc-toc-inner { padding: 16px 12px 40px; }
-    .doc-toc.collapsed .doc-toc-inner { display: none; }
+    .doc-toc-inner {
+      padding: 6px 12px 40px;
+      opacity: 1;
+      transition: opacity 0.2s ease 0.1s;
+    }
     .doc-toc-header {
+      position: relative;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 14px 12px 10px;
+      padding: 0 12px 10px;
       border-bottom: 1px solid var(--border);
-    }
-    .doc-toc.collapsed .doc-toc-header {
-      border-bottom: none;
-      padding: 12px 10px;
-      justify-content: center;
+      opacity: 1;
+      transition: opacity 0.2s ease 0.1s, border-color 0.2s;
     }
     .doc-toc-header h3 {
       font-size: 12px;
@@ -687,24 +708,36 @@
       letter-spacing: 0.5px;
       color: var(--text-dim);
       margin: 0;
+      padding-right: 32px;
     }
-    .doc-toc.collapsed .doc-toc-header h3 { display: none; }
     .doc-toc-toggle {
-      width: 24px; height: 24px;
-      border: none;
-      background: none;
+      position: absolute;
+      right: 8px;
+      top: 0;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-sidebar);
       cursor: pointer;
       color: var(--text-dim);
-      border-radius: 4px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
-      transition: all 0.15s;
+      font-size: 11px;
       flex-shrink: 0;
+      z-index: 42;
+      transition: color 0.15s, background 0.15s, box-shadow 0.15s,
+                  transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
+                  right 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
+                  top 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
-    .doc-toc-toggle:hover { background: var(--accent-light); color: var(--accent); }
-    .doc-toc.collapsed .doc-toc-toggle { transform: rotate(180deg); }
+    .doc-toc-toggle:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-light);
+    }
     .doc-toc .toc-item {
       display: block;
       padding: 4px 10px;
@@ -948,15 +981,9 @@ function showDoc(docId) {
 function toggleToc() {
   tocCollapsed = !tocCollapsed;
   localStorage.setItem('tocCollapsed', tocCollapsed.toString());
-  // Update TOC class
-  const toc = document.querySelector('.doc-toc');
-  if (toc) {
-    toc.classList.toggle('collapsed', tocCollapsed);
-  }
-  // Update doc-content margin
-  const docContent = document.querySelector('.doc-content');
-  if (docContent) {
-    docContent.style.marginLeft = tocCollapsed ? '36px' : '200px';
+  const page = document.querySelector('.doc-page');
+  if (page) {
+    page.classList.toggle('toc-collapsed', tocCollapsed);
   }
 }
 
@@ -1269,13 +1296,13 @@ function renderDocPage(docId) {
     });
   }
 
-  const tocCollapsedClass = tocCollapsed ? ' collapsed' : '';
+  const docPageClass = tocCollapsed ? ' doc-page toc-collapsed' : 'doc-page';
 
   const tocHTML = `
-    <div class="doc-toc${tocCollapsedClass}">
+    <div class="doc-toc">
       <div class="doc-toc-header">
         <h3>📑 文章导航</h3>
-        <button class="doc-toc-toggle" onclick="toggleToc()" title="${tocCollapsed ? '展开导航' : '收起导航'}">◀</button>
+        <button class="doc-toc-toggle" onclick="toggleToc()" title="收起导航">◀</button>
       </div>
       <div class="doc-toc-inner">
         ${toc.length > 0
@@ -1291,9 +1318,9 @@ function renderDocPage(docId) {
   `;
 
   document.getElementById('contentArea').innerHTML = `
-    <div class="doc-page">
+    <div class="${docPageClass}">
       ${tocHTML}
-      <div class="doc-content" style="margin-left:${tocCollapsed ? '36px' : '200px'}">
+      <div class="doc-content">
         <h1>${esc(doc.title)}</h1>
         <div class="doc-meta">
           ${tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}

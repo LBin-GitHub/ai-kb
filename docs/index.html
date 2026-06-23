@@ -337,7 +337,7 @@
       pointer-events: none;
     }
     .doc-page.toc-collapsed .doc-toc-toggle {
-      right: 4px;
+      left: calc(280px + 4px);
       top: 50%;
       transform: translateY(-50%) rotate(180deg);
     }
@@ -708,11 +708,11 @@
       color: var(--text-dim);
       margin: 0;
     }
-    /* toggle button — positioned absolutely within .doc-toc, stays visible when collapsed */
+    /* toggle button — position:fixed so it never gets clipped by TOC overflow:hidden */
     .doc-toc-toggle {
-      position: absolute;
-      right: 4px;
-      top: 14px;
+      position: fixed;
+      top: 70px;
+      left: calc(280px + 200px - 32px);
       width: 28px;
       height: 28px;
       border: 1px solid var(--border);
@@ -728,6 +728,7 @@
       z-index: 42;
       transition: color 0.15s, background 0.15s, box-shadow 0.15s,
                   transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
+                  left 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
                   top 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .doc-toc-toggle:hover {

@@ -577,6 +577,32 @@
       line-height: 1.75;
       color: var(--text);
     }
+    .rag-msg.assistant .rag-answer-summary {
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+    .rag-msg.assistant .rag-answer-summary .summary-icon {
+      margin-right: 4px;
+    }
+    .rag-msg.assistant .rag-answer-detail-label {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .rag-msg.assistant .kw-highlight {
+      background: #fef08a;
+      color: #1a1a1a;
+      font-weight: 600;
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
     .rag-input-area {
       padding: 10px 14px;
       border-top: 1px solid var(--border);
@@ -736,7 +762,7 @@
     <div class="rag-msg assistant">你好！我是基于你飞书AI知识库的助手。问我任何问题，我会从你的知识库中找答案 ✨</div>
   </div>
   <div class="rag-input-area">
-    <input type="text" id="ragInput" placeholder="输入问题，如：什么是Token？" onkeydown="if(event.key==='Enter')askRag()">
+    <input type="text" id="ragInput" placeholder="输入问题，如：什么是Token？" onkeydown="if(event.key==='Enter'){event.preventDefault();askRag();}">
     <button id="ragSend" onclick="askRag()">发送</button>
   </div>
 </div>
@@ -1581,6 +1607,57 @@ function searchRag(query) {
   return scored.filter(c => c.score >= 1.5).sort((a, b) => b.score - a.score).slice(0, 5);
 }
 
+function extractDefinitionContent(text, keywords) {
+  if (!text) return '';
+  
+  // 把文本按句子切分
+  const sentences = text.split(/(?<=[。！？；\n])/g).map(s => s.trim()).filter(s => s.length > 6);
+  if (sentences.length === 0) return esc(text.substring(0, 300));
+
+  const kws = keywords.map(k => k.toLowerCase());
+
+  // 为每句话打分：包含关键词、包含定义标记
+  const scored = sentences.map(s => {
+    const lower = s.toLowerCase();
+    let score = 0;
+    for (const kw of kws) {
+      if (lower.includes(kw)) score += 3;
+    }
+    // 定义类句子加分
+    if (/是[一]?[种个项类]/.test(s)) score += 2;
+    if (/指(的是|代)?/.test(s)) score += 2;
+    if (/全称|简称|英文|缩写|又称|定义/.test(s)) score += 1;
+    if (/概念|含义|意思是/.test(s)) score += 1;
+    return { text: s, score };
+  });
+
+  // 取高分句子（最多5句），保持原文顺序
+  const relevant = scored
+    .filter(s => s.score >= 1)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  if (relevant.length === 0) {
+    // fallback: 取前300字
+    return esc(text.substring(0, 300));
+  }
+
+  // 按原文顺序排列
+  const ordered = sentences
+    .filter(s => relevant.some(r => r.text === s))
+    .map(s => {
+      // 高亮关键词
+      let display = esc(s);
+      for (const kw of keywords) {
+        const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
+        display = display.replace(regex, '<strong class="kw-highlight">$1</strong>');
+      }
+      return display;
+    });
+
+  return ordered.join('');
+}
+
 function extractRelevantParagraph(text, query) {
   const qWords = query.toLowerCase().trim().split(/\s+/).filter(w => w.length >= 2);
   const qLower = query.toLowerCase().trim();
@@ -1618,6 +1695,85 @@ function extractRelevantParagraph(text, query) {
   return relevant.slice(0, 3).map(s => esc(s.text)).join('<br><br>');
 }
 
+// ============================================================
+// KEYWORD EXTRACTION — 从用户提问中提取核心关键词
+// ============================================================
+function extractKeywords(query) {
+  const q = query.trim();
+  if (!q) return [];
+
+  // 匹配模式：什么是X 或 X是什么 → 关键词 = X
+  let m = q.match(/什么是(.+?)(?:[?？。]|$)/);
+  if (m) return [m[1].trim()];
+
+  m = q.match(/(.+?)是什么(?:意思|含义)?/);
+  if (m) return [m[1].trim()];
+
+  m = q.match(/(.+?)指(?:的是|的)?什么/);
+  if (m) return [m[1].trim()];
+
+  m = q.match(/(.+?)的定义/);
+  if (m) return [m[1].trim()];
+
+  // 介绍一下X / 解释一下X / 说说X
+  m = q.match(/(?:介绍|解释|说说|讲讲)(?:一下)?(.+)/);
+  if (m) return [m[1].trim()];
+
+  // X和Y的区别/对比/差异
+  m = q.match(/(.+?)(?:和|与|跟|同|vs\.?|VS\.?)(.+?)(?:的区别|对比|比较|差异|有什么不同)/i);
+  if (m) return [m[1].trim(), m[2].trim()];
+
+  // 去掉常见疑问词和停用词，提取实体词
+  const stopPattern = /^(?:请问|问一下|我想知道|帮我|告诉我|什么是|是谁|什么叫|如何|怎么|怎么样|为什么|哪些|哪个|在哪|什么时候|可以|能|会|有没有|有|在|的|了|吗|呢|吧|啊|哦|嗯|是|什么|请问一下|我想问)/;
+  let cleaned = q;
+  // 反复去掉前缀停用词
+  let prev = '';
+  while (prev !== cleaned) {
+    prev = cleaned;
+    cleaned = cleaned.replace(stopPattern, '').trim();
+  }
+  // 去掉后缀
+  cleaned = cleaned.replace(/[?？。！!、]$/, '').trim();
+
+  if (!cleaned || cleaned.length < 1) return [q.trim()];
+
+  // 提取英文缩写/词汇（优先）
+  const engMatches = cleaned.match(/[A-Za-z][A-Za-z0-9._-]{1,}/g);
+  if (engMatches && engMatches.length > 0) {
+    // 过滤掉太短的（单个字母）
+    const valid = engMatches.filter(w => w.length >= 2);
+    if (valid.length > 0) return valid.slice(0, 3);
+  }
+
+  // 中文分词：基于常见AI术语词典切分
+  const aiTerms = [
+    '大语言模型', '语言模型', '机器学习', '深度学习', '神经网络', '自然语言处理',
+    '注意力机制', '自注意力', '多头注意力', '残差连接', '层归一化', '前馈网络',
+    '位置编码', '词嵌入', '词向量', '分词器', '编码器', '解码器',
+    '损失函数', '梯度下降', '反向传播', '激活函数', '正则化', '过拟合',
+    '强化学习', '迁移学习', '微调', '预训练', '有监督学习', '无监督学习',
+    '卷积神经网络', '循环神经网络', '生成对抗网络', '变分自编码器',
+    '知识图谱', '语义理解', '文本生成', '情感分析', '命名实体识别',
+    '提示工程', '思维链', '上下文学习', '少样本学习', '零样本',
+    '扩散模型', '文生图', '文生视频', '多模态', '向量数据库',
+  ];
+  for (const term of aiTerms) {
+    if (cleaned.includes(term)) return [term];
+  }
+
+  // 通用：去掉剩余停用词，返回长的词
+  const genStops = ['的', '了', '吗', '呢', '吧', '啊', '哦', '嗯', '是', '什么', '怎么', '如何',
+    '为什么', '哪些', '哪个', '请问', '可以', '能', '会', '有', '在', '和', '与', '或',
+    '我', '你', '他', '她', '它', '们', '这', '那', '哪', '一', '个', '些',
+    '不', '就', '也', '都', '还', '要', '把', '被', '让', '给', '对', '从', '到'];
+  let tk = cleaned;
+  for (const sw of genStops) {
+    tk = tk.replace(new RegExp(sw, 'g'), ' ');
+  }
+  const words = tk.split(/\s+/).filter(w => w.length >= 2);
+  return words.length > 0 ? words.slice(0, 3) : [q.trim()];
+}
+
 function clearAllHighlights() {
   document.querySelectorAll('mark.rag-highlight').forEach(m => {
     const parent = m.parentNode;
@@ -1639,8 +1795,8 @@ function toggleRag() {
   }
 }
 
-function ragOpenDoc(docId, query) {
-  highlightQuery = query;
+function ragOpenDoc(docId, keywordsStr) {
+  highlightQuery = keywordsStr;
   openDoc(docId);
 }
 
@@ -1652,17 +1808,19 @@ function askRag() {
   const messages = document.getElementById('ragMessages');
   messages.innerHTML += `<div class="rag-msg user"><span>${esc(query)}</span></div>`;
 
-  // Clear input immediately
+  // 立即清空输入框（先 blur 再清空，确保视觉效果）
   input.value = '';
   input.blur();
   document.getElementById('ragSend').disabled = true;
 
   const results = searchRag(query);
+  const keywords = extractKeywords(query);
+  const keywordStr = keywords.join(' ');
 
   if (results.length === 0) {
     messages.innerHTML += `<div class="rag-msg assistant"><span class="no-match">📭 抱歉，我在知识库中没有找到与「${esc(query)}」相关的内容。知识库后续更新后我会自动学习到。</span></div>`;
   } else {
-    // Deduplicate by document ID
+    // 按文档去重
     const seenDocIds = new Set();
     const deduped = [];
     for (const r of results) {
@@ -1673,41 +1831,123 @@ function askRag() {
     }
     const top = deduped.slice(0, 3);
 
-    // Build a summarized answer
-    let answerParts = [];
-    answerParts.push(`<div class="rag-answer-intro">根据你的飞书AI知识库，以下是关于「<strong>${esc(query)}</strong>」的内容总结：</div>`);
+    // 检测是否为"什么是X"类提问，生成总结式开头
+    const isDefinitionQ = /什么是|是什么|的定义|指什么|什么意思|介绍|解释/.test(query);
+    const topicName = keywords.length > 0 ? keywords[0] : query;
 
-    for (let i = 0; i < top.length; i++) {
-      const r = top[i];
-      // Extract full paragraphs (not just sentences) for coherence
-      const relevantContent = extractRelevantParagraph(r.text, query);
-      if (relevantContent) {
-        answerParts.push(
-          `<div class="rag-answer-section">` +
-          `<div class="rag-answer-heading">📖 ${esc(r.docTitle)}</div>` +
-          `<div class="rag-answer-body">${relevantContent}</div>` +
-          `</div>`
-        );
+    let answerHTML = '';
+
+    if (isDefinitionQ && top.length > 0) {
+      // 总结式回答：先给一句话定义，再展开
+      answerHTML += `<div class="rag-answer-intro">根据你的飞书AI知识库：</div>`;
+
+      // 从匹配内容中提取定义句作为总结
+      const allContent = top.map(r => r.text).join('\n');
+      const defSummary = composeSummary(allContent, topicName, keywords);
+
+      if (defSummary) {
+        answerHTML += `<div class="rag-answer-summary">${defSummary}</div>`;
+      }
+
+      // 来源详情
+      answerHTML += `<div class="rag-answer-detail-label">📚 详细内容：</div>`;
+      for (let i = 0; i < top.length; i++) {
+        const r = top[i];
+        const relevantContent = extractDefinitionContent(r.text, keywords);
+        if (relevantContent) {
+          answerHTML +=
+            `<div class="rag-answer-section">` +
+            `<div class="rag-answer-heading">📖 ${esc(r.docTitle)}</div>` +
+            `<div class="rag-answer-body">${relevantContent}</div>` +
+            `</div>`;
+        }
+      }
+    } else {
+      // 非定义类提问：保持结构化展示
+      answerHTML += `<div class="rag-answer-intro">根据你的飞书AI知识库，以下是关于「<strong>${esc(query)}</strong>」的内容：</div>`;
+      for (let i = 0; i < top.length; i++) {
+        const r = top[i];
+        const relevantContent = extractDefinitionContent(r.text, keywords);
+        if (relevantContent) {
+          answerHTML +=
+            `<div class="rag-answer-section">` +
+            `<div class="rag-answer-heading">📖 ${esc(r.docTitle)}</div>` +
+            `<div class="rag-answer-body">${relevantContent}</div>` +
+            `</div>`;
+        }
       }
     }
 
-    const answerText = answerParts.join('\n');
-
-    const escapedQuery = query.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    // 来源引用（点击用关键词高亮）
+    const escapedKw = keywordStr.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     const sourcesHTML = top.map((r) =>
-      `<div class="source" onclick="ragOpenDoc('${r.docId}', '${escapedQuery}')">📄 ${esc(r.docTitle)}</div>`
+      `<div class="source" onclick="ragOpenDoc('${r.docId}', '${escapedKw}')">📄 ${esc(r.docTitle)}</div>`
     ).join('');
 
-    messages.innerHTML += `<div class="rag-msg assistant">${answerText}${sourcesHTML}</div>`;
+    messages.innerHTML += `<div class="rag-msg assistant">${answerHTML}${sourcesHTML}</div>`;
   }
 
   messages.scrollTop = messages.scrollHeight;
   document.getElementById('ragSend').disabled = false;
-  // Refocus input after response
+
+  // 重新聚焦输入框
   setTimeout(() => {
     const inp = document.getElementById('ragInput');
-    if (inp) inp.focus();
-  }, 100);
+    if (inp) {
+      inp.value = '';
+      inp.focus();
+    }
+  }, 150);
+}
+
+// 从匹配内容中提取一句话总结（"X是xxx"格式）
+function composeSummary(allText, topicName, keywords) {
+  if (!allText || !topicName) return null;
+
+  const sentences = allText.split(/(?<=[。！？；])/g).map(s => s.trim()).filter(s => s.length > 8);
+
+  // 优先找定义句：包含"X是"、"X指"、"X全称"、"X简称"等
+  const topicLower = topicName.toLowerCase();
+  const defPatterns = [
+    new RegExp(`(${escRegex(topicName)})\\s*(是[一]?[种个项类]?[^。！？；]{10,})`),
+    new RegExp(`(${escRegex(topicName)})\\s*(指[^。！？；]{10,})`),
+    new RegExp(`(${escRegex(topicName)})\\s*(全称[^。！？；]{5,})`),
+    new RegExp(`(${escRegex(topicName)})\\s*(又称|也叫|即)[^。！？；]{5,}`),
+    new RegExp(`(${escRegex(topicName)})\\s*(英文[^。！？；]{5,})`),
+  ];
+
+  for (const pattern of defPatterns) {
+    for (const s of sentences) {
+      const m = s.match(pattern);
+      if (m) {
+        // 高亮关键词
+        let def = esc(m[0]);
+        // 把 topicName 高亮
+        const topicRegex = new RegExp(`(${escRegex(topicName)})`, 'gi');
+        def = def.replace(topicRegex, '<strong class="kw-highlight">$1</strong>');
+        return `<span class="summary-icon">💡</span> ${def}`;
+      }
+    }
+  }
+
+  // 没有标准定义句，尝试拼凑
+  const kws = keywords.map(k => k.toLowerCase());
+  const relevant = sentences.filter(s => {
+    const lower = s.toLowerCase();
+    return kws.some(kw => lower.includes(kw)) && s.length > 15;
+  });
+
+  if (relevant.length > 0) {
+    const best = relevant[0];
+    let display = esc(best);
+    for (const kw of keywords) {
+      const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
+      display = display.replace(regex, '<strong class="kw-highlight">$1</strong>');
+    }
+    return `<span class="summary-icon">💡</span> ${display}`;
+  }
+
+  return null;
 }
 
 // ============================================================

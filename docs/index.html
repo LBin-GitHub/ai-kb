@@ -368,6 +368,18 @@
       transition: border-color 0.15s;
     }
     .doc-content a:hover { border-bottom-color: var(--accent); }
+    .doc-content mark.rag-highlight {
+      background: #fef08a;
+      color: #1a1a1a;
+      padding: 1px 3px;
+      border-radius: 3px;
+      box-shadow: 0 0 0 2px #fef08a;
+      transition: background 0.3s;
+    }
+    .doc-content mark.rag-highlight.active-highlight {
+      background: #fbbf24;
+      box-shadow: 0 0 0 3px #fbbf24;
+    }
     .doc-content .ai-link {
       color: var(--accent);
       cursor: pointer;
@@ -533,6 +545,14 @@
       color: var(--text-dim);
       font-style: italic;
     }
+    .rag-msg.assistant .rag-answer {
+      background: var(--bg);
+      padding: 10px 14px;
+      border-radius: 10px;
+      border-left: 3px solid var(--accent);
+      line-height: 1.75;
+      margin-bottom: 8px;
+    }
     .rag-input-area {
       padding: 10px 14px;
       border-top: 1px solid var(--border);
@@ -677,7 +697,12 @@
 </main>
 
 <!-- ===== RAG KNOWLEDGE ASSISTANT ===== -->
-<button class="rag-fab" id="ragFab" onclick="toggleRag()" title="知识助手">💬</button>
+<button class="rag-fab" id="ragFab" onclick="toggleRag()" title="知识助手">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 20c0-4 4-7 8-7s8 3 8 7"/>
+  </svg>
+</button>
 <div class="rag-panel" id="ragPanel">
   <div class="rag-header">
     <strong>🤖 Abin 知识助手</strong>
@@ -1189,6 +1214,11 @@ function renderDocPage(docId) {
   }, 100);
 
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+
+  // Apply highlight if coming from RAG query
+  if (highlightQuery) {
+    setTimeout(() => applyHighlight(highlightQuery), 150);
+  }
 }
 
 function extractTOC(content) {
@@ -1286,6 +1316,66 @@ function updateTocActive() {
   document.querySelectorAll('.toc-item').forEach(item => {
     item.classList.toggle('toc-active', item.id === 'toc-' + currentId);
   });
+}
+
+function applyHighlight(query) {
+  if (!query) return;
+  const docBody = document.getElementById('docBody');
+  if (!docBody) { highlightQuery = ''; return; }
+
+  const qWords = query.trim().split(/\s+/).filter(w => w.length >= 1);
+
+  // Build regex that matches any of the query words
+  const escapedWords = qWords.map(w => escRegex(w));
+  const pattern = escapedWords.join('|');
+  const regex = new RegExp(`(${pattern})`, 'gi');
+
+  // Walk text nodes and wrap matches
+  function highlightNode(node) {
+    if (node.nodeType === 3) { // Text node
+      const text = node.textContent;
+      if (!regex.test(text)) return;
+      regex.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIdx) {
+          frag.appendChild(document.createTextNode(text.substring(lastIdx, match.index)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'rag-highlight';
+        mark.textContent = match[0];
+        frag.appendChild(mark);
+        lastIdx = regex.lastIndex;
+        if (!match[0]) regex.lastIndex++;
+      }
+      if (lastIdx < text.length) {
+        frag.appendChild(document.createTextNode(text.substring(lastIdx)));
+      }
+      node.parentNode.replaceChild(frag, node);
+    } else if (node.nodeType === 1 && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE' && !node.classList.contains('ai-link')) {
+      // Recurse into element children (but not links)
+      for (let i = 0; i < node.childNodes.length; i++) {
+        highlightNode(node.childNodes[i]);
+      }
+    }
+  }
+
+  highlightNode(docBody);
+
+  // Scroll to first highlight
+  const firstMark = docBody.querySelector('mark.rag-highlight');
+  if (firstMark) {
+    firstMark.classList.add('active-highlight');
+    firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Fade the active-highlight after 2 seconds
+    setTimeout(() => {
+      firstMark.classList.remove('active-highlight');
+    }, 2500);
+  }
+
+  highlightQuery = '';
 }
 
 // ============================================================
@@ -1415,22 +1505,20 @@ function escRegex(str) {
 // RAG KNOWLEDGE ASSISTANT
 // ============================================================
 let ragChunks = [];
+let highlightQuery = '';
 
 function buildRagIndex() {
   ragChunks = [];
   for (const doc of data.documents) {
     if (doc.isFolder) continue;
-    // Clean content
     let content = doc.content;
     if (content.trim().startsWith('<')) {
       content = content.replace(/<title>.*?<\/title>/g, '').replace(/<[^>]+>/g, '\n');
     }
-    // Split by double newlines into paragraphs
     const paragraphs = content.split(/\n\n+/).map(p => p.trim()).filter(p => p.length > 30);
     for (const para of paragraphs) {
       ragChunks.push({ text: para, docTitle: doc.title, docId: doc.id });
     }
-    // Also split by headings for better coverage
     const sections = content.split(/\n(?=#{1,3}\s)/);
     for (const sec of sections) {
       const trimmed = sec.trim();
@@ -1449,17 +1537,11 @@ function searchRag(query) {
   const scored = ragChunks.map(chunk => {
     const textLower = chunk.text.toLowerCase();
     let score = 0;
-
-    // Exact phrase match (highest weight)
     if (textLower.includes(q)) score += 10;
-
-    // Word matches
     let matchedWords = 0;
     for (const w of qWords) {
       if (textLower.includes(w)) { score += 3; matchedWords++; }
     }
-
-    // Character-level fuzzy match for Chinese
     if (matchedWords === 0) {
       let qi = 0;
       for (let ti = 0; ti < textLower.length && qi < q.length; ti++) {
@@ -1467,17 +1549,38 @@ function searchRag(query) {
       }
       if (qi >= q.length * 0.8) score += 1;
     }
-
-    // Title match bonus
     if (chunk.docTitle.toLowerCase().includes(q)) score += 2;
-
-    // Prefer shorter, more focused chunks
     score += Math.min(2, 200 / Math.max(chunk.text.length, 100));
-
     return { ...chunk, score };
   });
 
   return scored.filter(c => c.score >= 1.5).sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+function extractRelevantSentences(text, query) {
+  const qWords = query.toLowerCase().trim().split(/\s+/).filter(w => w.length >= 2);
+  const sentences = text.split(/(?<=[。！？；\n])/g).map(s => s.trim()).filter(s => s.length > 8);
+
+  // Score each sentence by keyword overlap
+  const scored = sentences.map(s => {
+    const lower = s.toLowerCase();
+    let sScore = 0;
+    for (const w of qWords) {
+      if (lower.includes(w)) sScore += 2;
+    }
+    if (lower.includes(query.toLowerCase().trim())) sScore += 5;
+    return { text: s, score: sScore };
+  });
+
+  // Take top scoring sentences, preserving original order
+  const relevant = scored.filter(s => s.score > 0);
+  if (relevant.length === 0) {
+    // Fallback: first 200 chars
+    return text.substring(0, 200);
+  }
+
+  // Pick up to 5 sentences, maintaining order
+  return relevant.slice(0, 5).map(s => s.text).join('');
 }
 
 function toggleRag() {
@@ -1488,53 +1591,61 @@ function toggleRag() {
   }
 }
 
+function ragOpenDoc(docId, query) {
+  highlightQuery = query;
+  openDoc(docId);
+}
+
 function askRag() {
   const input = document.getElementById('ragInput');
   const query = input.value.trim();
   if (!query) return;
 
   const messages = document.getElementById('ragMessages');
-  // Add user message
   messages.innerHTML += `<div class="rag-msg user"><span>${esc(query)}</span></div>`;
   input.value = '';
   document.getElementById('ragSend').disabled = true;
 
-  // Search
   const results = searchRag(query);
 
-  let answer = '';
   if (results.length === 0) {
-    answer = '<div class="rag-msg assistant"><span class="no-match">📭 抱歉，我在知识库中没有找到与「' + esc(query) + '」相关的内容。知识库后续更新后我会自动学习到。</span></div>';
+    messages.innerHTML += `<div class="rag-msg assistant"><span class="no-match">📭 抱歉，我在知识库中没有找到与「${esc(query)}」相关的内容。知识库后续更新后我会自动学习到。</span></div>`;
   } else {
-    // Remove near-duplicates
-    const seen = new Set();
+    // Deduplicate by document ID (one source per doc)
+    const seenDocIds = new Set();
     const deduped = [];
     for (const r of results) {
-      const hash = r.text.substring(0, 60);
-      if (!seen.has(hash)) { seen.add(hash); deduped.push(r); }
+      if (!seenDocIds.has(r.docId)) {
+        seenDocIds.add(r.docId);
+        deduped.push(r);
+      }
     }
     const top = deduped.slice(0, 3);
 
+    // Build answer from extracted sentences
     let answerText = '';
-    for (const r of top) {
-      // Truncate very long chunks
-      let display = r.text;
-      if (display.length > 500) {
-        // Try to break at sentence boundary
-        const cut = display.lastIndexOf('。', 480);
-        display = cut > 300 ? display.substring(0, cut + 1) + '...' : display.substring(0, 480) + '...';
+    for (let i = 0; i < top.length; i++) {
+      const r = top[i];
+      const extracted = extractRelevantSentences(r.text, query);
+      if (extracted) {
+        // Add a section label from the doc title
+        answerText += (i > 0 ? '\n\n' : '') + '📌 ' + extracted;
       }
-      answerText += display + '\n\n';
     }
 
-    const sourcesHTML = top.map((r, i) =>
-      `<div class="source" onclick="openDoc('${r.docId}')">📄 ${esc(r.docTitle)}</div>`
+    if (!answerText.trim()) {
+      answerText = '根据知识库内容，未找到足够相关的描述。';
+    }
+
+    // Sources: one per document
+    const escapedQuery = query.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const sourcesHTML = top.map((r) =>
+      `<div class="source" onclick="ragOpenDoc('${r.docId}', '${escapedQuery}')">📄 ${esc(r.docTitle)}</div>`
     ).join('');
 
-    answer = `<div class="rag-msg assistant">${esc(answerText).replace(/\n\n/g, '<br><br>')}${sourcesHTML}</div>`;
+    messages.innerHTML += `<div class="rag-msg assistant"><div class="rag-answer">${esc(answerText).replace(/\n\n/g, '<br><br>')}</div>${sourcesHTML}</div>`;
   }
 
-  messages.innerHTML += answer;
   messages.scrollTop = messages.scrollHeight;
   document.getElementById('ragSend').disabled = false;
   document.getElementById('ragInput').focus();

@@ -1885,7 +1885,9 @@ function askRag() {
 
   const results = searchRag(query);
   const keywords = extractKeywords(query);
-  const keywordStr = keywords.join(' ');
+  // 扩展同义词用于高亮（用户问"LLM"，高亮时也要标记"大模型"）
+  const expandedKw = keywords.length > 0 ? expandSearchTerms(keywords[0]) : [];
+  const keywordStr = [...new Set([...keywords, ...expandedKw])].join(' ');
 
   if (results.length === 0) {
     messages.innerHTML += `<div class="rag-msg assistant"><span class="no-match">📭 抱歉，「${esc(query)}」这个内容目前在我的知识库中还没有收录，无法回答。知识库后续更新后我会自动学习到。</span></div>`;

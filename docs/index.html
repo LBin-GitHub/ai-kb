@@ -694,10 +694,9 @@
       transition: opacity 0.2s ease 0.1s;
     }
     .doc-toc-header {
-      position: relative;
       display: flex;
       align-items: center;
-      padding: 0 12px 10px;
+      padding: 30px 12px 10px;
       border-bottom: 1px solid var(--border);
       opacity: 1;
       transition: opacity 0.2s ease 0.1s, border-color 0.2s;
@@ -708,12 +707,12 @@
       letter-spacing: 0.5px;
       color: var(--text-dim);
       margin: 0;
-      padding-right: 32px;
     }
+    /* toggle button — positioned absolutely within .doc-toc, stays visible when collapsed */
     .doc-toc-toggle {
       position: absolute;
-      right: 8px;
-      top: 0;
+      right: 4px;
+      top: 14px;
       width: 28px;
       height: 28px;
       border: 1px solid var(--border);
@@ -729,7 +728,6 @@
       z-index: 42;
       transition: color 0.15s, background 0.15s, box-shadow 0.15s,
                   transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
-                  right 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
                   top 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .doc-toc-toggle:hover {
@@ -1305,9 +1303,9 @@ function renderDocPage(docId) {
 
   const tocHTML = `
     <div class="doc-toc">
+      <button class="doc-toc-toggle" onclick="toggleToc()" title="收起导航">◀</button>
       <div class="doc-toc-header">
         <h3>📑 文章导航</h3>
-        <button class="doc-toc-toggle" onclick="toggleToc()" title="收起导航">◀</button>
       </div>
       <div class="doc-toc-inner">
         ${toc.length > 0

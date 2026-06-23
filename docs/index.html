@@ -337,7 +337,7 @@
       pointer-events: none;
     }
     .doc-page.toc-collapsed .doc-toc-toggle {
-      left: calc(280px + 4px);
+      left: 316px;
       top: 50%;
       transform: translateY(-50%) rotate(180deg);
     }
@@ -708,22 +708,23 @@
       color: var(--text-dim);
       margin: 0;
     }
-    /* toggle button — position:fixed so it never gets clipped by TOC overflow:hidden */
+    /* toggle button — pinned to left edge of article title area */
     .doc-toc-toggle {
       position: fixed;
-      top: 70px;
-      left: calc(280px + 200px - 32px);
-      width: 28px;
-      height: 28px;
+      top: 80px;
+      left: 480px;
+      width: 24px;
+      height: 42px;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 0 6px 6px 0;
+      border-left: none;
       background: var(--bg-sidebar);
       cursor: pointer;
       color: var(--text-dim);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
+      font-size: 10px;
       flex-shrink: 0;
       z-index: 42;
       transition: color 0.15s, background 0.15s, box-shadow 0.15s,
@@ -732,10 +733,45 @@
                   top 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .doc-toc-toggle:hover {
-      background: var(--accent-light);
-      color: var(--accent);
+      background: var(--accent);
+      color: #fff;
       border-color: var(--accent);
-      box-shadow: 0 0 0 2px var(--accent-light);
+      box-shadow: 0 2px 8px rgba(79,70,229,0.3);
+    }
+    /* hover tooltip */
+    .doc-toc-toggle::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 32px;
+      top: 50%;
+      transform: translateY(-50%);
+      white-space: nowrap;
+      background: var(--accent);
+      color: #fff;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease 0.1s;
+      font-family: var(--font-sans);
+      font-weight: 500;
+    }
+    .doc-toc-toggle::before {
+      content: '';
+      position: absolute;
+      left: 26px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 5px solid transparent;
+      border-right-color: var(--accent);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease 0.1s;
+    }
+    .doc-toc-toggle:hover::after,
+    .doc-toc-toggle:hover::before {
+      opacity: 1;
     }
     .doc-toc .toc-item {
       display: block;
@@ -988,6 +1024,10 @@ function toggleToc() {
   const page = document.querySelector('.doc-page');
   if (page) {
     page.classList.toggle('toc-collapsed', tocCollapsed);
+  }
+  const btn = document.querySelector('.doc-toc-toggle');
+  if (btn) {
+    btn.setAttribute('data-tip', tocCollapsed ? '展开目录' : '收起目录');
   }
 }
 
@@ -1304,7 +1344,7 @@ function renderDocPage(docId) {
 
   const tocHTML = `
     <div class="doc-toc">
-      <button class="doc-toc-toggle" onclick="toggleToc()" title="收起导航">◀</button>
+      <button class="doc-toc-toggle" onclick="toggleToc()" data-tip="${tocCollapsed ? '展开目录' : '收起目录'}">◀</button>
       <div class="doc-toc-header">
         <h3>📑 文章导航</h3>
       </div>

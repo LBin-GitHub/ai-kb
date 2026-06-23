@@ -311,6 +311,7 @@
       flex: 1;
       display: flex;
       min-height: 0;
+      padding-left: 200px;
     }
     .doc-content {
       flex: 1;
@@ -639,18 +640,17 @@
 
     /* ===== TOC in doc page ===== */
     .doc-toc {
+      position: fixed;
+      top: 0;
+      left: 280px;
       width: 200px;
-      min-width: 200px;
+      height: 100vh;
       border-right: 1px solid var(--border);
       padding: 24px 16px 40px;
       overflow-y: auto;
       background: var(--bg-sidebar);
       font-size: 13px;
-      position: sticky;
-      top: 56px;
-      align-self: flex-start;
-      max-height: calc(100vh - 56px);
-      order: -1;
+      z-index: 50;
     }
     .doc-toc h3 {
       font-size: 12px;
@@ -1642,53 +1642,55 @@ function searchRag(query) {
 
 function extractDefinitionContent(text, keywords) {
   if (!text) return '';
-  
-  // 把文本按句子切分
+
+  // 切句子
   const sentences = text.split(/(?<=[。！？；\n])/g).map(s => s.trim()).filter(s => s.length > 6);
   if (sentences.length === 0) return esc(text.substring(0, 300));
 
-  const kws = keywords.map(k => k.toLowerCase());
+  // 扩展同义词：用户问"LLM"，也要匹配"大模型"、"大语言模型"
+  const mainKw = keywords.length > 0 ? keywords[0] : '';
+  const searchTerms = mainKw ? expandSearchTerms(mainKw) : [];
+  const allKws = [...new Set([...keywords.map(k => k.toLowerCase()), ...searchTerms])];
 
-  // 为每句话打分：包含关键词、包含定义标记
-  const scored = sentences.map(s => {
+  // 为每句话打分
+  const scored = sentences.map((s, idx) => {
     const lower = s.toLowerCase();
     let score = 0;
-    for (const kw of kws) {
-      if (lower.includes(kw)) score += 3;
+    for (const kw of allKws) {
+      if (lower.includes(kw)) score += 4;
     }
-    // 定义类句子加分
-    if (/是[一]?[种个项类]/.test(s)) score += 2;
-    if (/指(的是|代)?/.test(s)) score += 2;
-    if (/全称|简称|英文|缩写|又称|定义/.test(s)) score += 1;
-    if (/概念|含义|意思是/.test(s)) score += 1;
-    return { text: s, score };
+    // 定义类标记加权
+    if (/是[一]?[种个项类位套]/.test(s)) score += 3;
+    if (/(?:指的是|即为|定义为|又称|也叫|即[^使便])/.test(s)) score += 3;
+    if (/全称|简称/.test(s)) score += 2;
+    if (/概念|含义|意思是|本质上|英文|缩写/.test(s)) score += 1;
+    // 靠前的句子更有可能是定义
+    if (idx < 5) score += 1;
+    return { text: s, score, idx };
   });
 
-  // 取高分句子（最多5句），保持原文顺序
-  const relevant = scored
-    .filter(s => s.score >= 1)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
-
+  // 取相关句子（分数≥3），最多取8个，按原文顺序排列
+  const relevant = scored.filter(s => s.score >= 3).slice(0, 8);
   if (relevant.length === 0) {
-    // fallback: 取前300字
-    return esc(text.substring(0, 300));
+    // fallback：取前400字
+    return esc(text.substring(0, 400));
   }
 
   // 按原文顺序排列
-  const ordered = sentences
-    .filter(s => relevant.some(r => r.text === s))
-    .map(s => {
-      // 高亮关键词
-      let display = esc(s);
-      for (const kw of keywords) {
-        const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
-        display = display.replace(regex, '<strong class="kw-highlight">$1</strong>');
-      }
-      return display;
-    });
+  relevant.sort((a, b) => a.idx - b.idx);
 
-  return ordered.join('');
+  // 格式化并高亮
+  return relevant.map(s => {
+    let display = esc(s.text);
+    // 高亮所有匹配的术语（按长度降序避免覆盖）
+    const uniqueTerms = [...new Set(allKws.filter(kw => s.text.toLowerCase().includes(kw)))]
+      .sort((a, b) => b.length - a.length);
+    for (const kw of uniqueTerms) {
+      const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
+      display = display.replace(regex, '<strong class="kw-highlight">$1</strong>');
+    }
+    return display;
+  }).join('');
 }
 
 function extractRelevantParagraph(text, query) {
@@ -1968,54 +1970,132 @@ function askRag() {
   }, 150);
 }
 
-// 从匹配内容中提取一句话总结（"X是xxx"格式）
+// 同义词/别称映射 —— 用户问"LLM"，知识库里写的是"大模型"
+function expandSearchTerms(topic) {
+  const lower = topic.toLowerCase().trim();
+  const terms = [lower];
+
+  const synonymMap = {
+    'llm': ['大模型', '大语言模型', '大型语言模型', 'large language model', '语言模型'],
+    '大模型': ['llm', '大语言模型', '大型语言模型', 'large language model'],
+    '大语言模型': ['llm', '大模型', '大型语言模型', 'large language model'],
+    'rag': ['检索增强生成', '检索增强'],
+    '检索增强生成': ['rag'],
+    'token': ['令牌', '词元', 'tokenize', 'tokenizer', '分词'],
+    '词元': ['token', '令牌'],
+    'agent': ['智能体', '智能代理', 'agent智能体'],
+    '智能体': ['agent', '智能代理'],
+    'prompt': ['提示词', '提示', '提示工程', 'prompt engineering'],
+    '提示词': ['prompt', '提示', 'prompt engineering'],
+    '提示工程': ['prompt', 'prompt engineering'],
+    'nlp': ['自然语言处理'],
+    '自然语言处理': ['nlp'],
+    'gpu': ['显卡', '图形处理器', 'gpu算力'],
+    'api': ['接口', '应用程序接口', 'api接口'],
+    'embedding': ['嵌入', '向量嵌入', '词嵌入', '词向量', '向量化'],
+    '词嵌入': ['embedding', '嵌入', '向量嵌入'],
+    '向量': ['vector', 'embedding', '嵌入'],
+    '注意力机制': ['attention', '注意力', '自注意力', 'self-attention'],
+    'attention': ['注意力机制', '注意力', '自注意力'],
+    '微调': ['finetuning', 'fine-tuning', 'fine tuning', 'sft', 'lora'],
+    'fine-tuning': ['微调', 'finetuning', 'sft'],
+    '预训练': ['pretraining', 'pre-training', 'pre training'],
+    'transformer': ['变换器', 'transformer架构'],
+    '多模态': ['multimodal', '多模态模型'],
+    '上下文窗口': ['context window', '上下文长度', 'context length'],
+    'mcp': ['model context protocol', 'mcp协议'],
+    'mlp': ['多层感知机', '多层感知器', '前馈网络'],
+    '深度学习': ['deep learning', '深度神经网络'],
+    '机器学习': ['machine learning', 'ml'],
+    '强化学习': ['reinforcement learning', 'rl', 'rlhf'],
+    '卷积神经网络': ['cnn', 'convolutional neural network'],
+    '循环神经网络': ['rnn', 'recurrent neural network'],
+    '生成对抗网络': ['gan', 'generative adversarial network'],
+    '迁移学习': ['transfer learning'],
+    '过拟合': ['overfitting', 'overfit'],
+    '正则化': ['regularization', '正则'],
+    '梯度下降': ['gradient descent', 'sgd', 'adam'],
+    '激活函数': ['activation function', 'relu', 'sigmoid', 'gelu'],
+    '损失函数': ['loss function', '交叉熵', 'cross entropy'],
+    '命名实体识别': ['ner', 'named entity recognition'],
+    '思维链': ['chain of thought', 'cot', '思维链推理'],
+    '少样本学习': ['few-shot', 'few shot learning'],
+    '零样本': ['zero-shot', 'zero shot'],
+    '扩散模型': ['diffusion model', '扩散', 'stable diffusion'],
+    '文生图': ['text-to-image', 'text to image', '图像生成'],
+    '文生视频': ['text-to-video', 'text to video'],
+    '向量数据库': ['vector database', '向量存储'],
+    '知识图谱': ['knowledge graph'],
+    '分词器': ['tokenizer', '分词'],
+    '监督学习': ['supervised learning'],
+    '无监督学习': ['unsupervised learning'],
+  };
+
+  for (const [key, syns] of Object.entries(synonymMap)) {
+    if (lower === key || lower.includes(key) || key.includes(lower)) {
+      terms.push(...syns);
+    }
+  }
+
+  return [...new Set(terms)];
+}
+
+// 从匹配内容中提取一句话总结（"X是xxx"格式）—— v2：同义词感知 + 智能评分
 function composeSummary(allText, topicName, keywords) {
   if (!allText || !topicName) return null;
 
-  const sentences = allText.split(/(?<=[。！？；])/g).map(s => s.trim()).filter(s => s.length > 8);
+  const sentences = allText.split(/(?<=[。！？；\n])/g).map(s => s.trim()).filter(s => s.length > 8);
+  if (sentences.length === 0) return null;
 
-  // 优先找定义句：包含"X是"、"X指"、"X全称"、"X简称"等
-  const topicLower = topicName.toLowerCase();
-  const defPatterns = [
-    new RegExp(`(${escRegex(topicName)})\\s*(是[一]?[种个项类]?[^。！？；]{10,})`),
-    new RegExp(`(${escRegex(topicName)})\\s*(指[^。！？；]{10,})`),
-    new RegExp(`(${escRegex(topicName)})\\s*(全称[^。！？；]{5,})`),
-    new RegExp(`(${escRegex(topicName)})\\s*(又称|也叫|即)[^。！？；]{5,}`),
-    new RegExp(`(${escRegex(topicName)})\\s*(英文[^。！？；]{5,})`),
-  ];
+  // 扩展搜索词：LLM → [LLM, 大模型, 大语言模型, Large Language Model]
+  const searchTerms = expandSearchTerms(topicName);
+  const allKws = [...new Set([...keywords.map(k => k.toLowerCase()), ...searchTerms])];
 
-  for (const pattern of defPatterns) {
-    for (const s of sentences) {
-      const m = s.match(pattern);
-      if (m) {
-        // 高亮关键词
-        let def = esc(m[0]);
-        // 把 topicName 高亮
-        const topicRegex = new RegExp(`(${escRegex(topicName)})`, 'gi');
-        def = def.replace(topicRegex, '<strong class="kw-highlight">$1</strong>');
-        return `<span class="summary-icon">💡</span> ${def}`;
+  // 对每句话打分，找最佳定义句
+  const scored = sentences.map((s, idx) => {
+    const lower = s.toLowerCase();
+    let score = 0;
+    const matchedTermsList = [];
+
+    // 关键词密度
+    for (const kw of allKws) {
+      if (lower.includes(kw)) {
+        score += 6;
+        matchedTermsList.push(kw);
       }
     }
-  }
 
-  // 没有标准定义句，尝试拼凑
-  const kws = keywords.map(k => k.toLowerCase());
-  const relevant = sentences.filter(s => {
-    const lower = s.toLowerCase();
-    return kws.some(kw => lower.includes(kw)) && s.length > 15;
+    // 定义标记加权
+    if (/是[一]?[种个项类位套]/.test(s)) score += 5;
+    if (/(?:指的是|即为|定义为|又称|也叫|即[^使便])/.test(s)) score += 5;
+    if (/全称|简称/.test(s)) score += 4;
+    if (/(?:英文|缩写).{0,6}(?:是|为|叫|：)/.test(s)) score += 3;
+    if (/概念|含义|意思是|本质上/.test(s)) score += 2;
+
+    // 句子越靠前，越可能是定义（通常定义在开头）
+    if (idx < 3) score += 2;
+    if (idx < 1) score += 1;
+
+    return { text: s, score, matchedTerms: matchedTermsList };
   });
 
-  if (relevant.length > 0) {
-    const best = relevant[0];
-    let display = esc(best);
-    for (const kw of keywords) {
-      const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
-      display = display.replace(regex, '<strong class="kw-highlight">$1</strong>');
-    }
-    return `<span class="summary-icon">💡</span> ${display}`;
+  const relevant = scored.filter(s => s.score >= 6);
+  if (relevant.length === 0) return null;
+
+  relevant.sort((a, b) => b.score - a.score);
+
+  // 取最高分的句子作为总结
+  const best = relevant[0];
+  let display = esc(best.text);
+
+  // 高亮所有匹配到的术语（按长度降序，避免短词覆盖长词的高亮）
+  const uniqueTerms = [...new Set(best.matchedTerms)].sort((a, b) => b.length - a.length);
+  for (const kw of uniqueTerms) {
+    const regex = new RegExp(`(${escRegex(kw)})`, 'gi');
+    display = display.replace(regex, '<strong class="kw-highlight">$1</strong>');
   }
 
-  return null;
+  return `<span class="summary-icon">💡</span> ${display}`;
 }
 
 // ============================================================

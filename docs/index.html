@@ -839,6 +839,9 @@
       border-left: 2px solid transparent;
       text-decoration: none;
       line-height: 1.45;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .doc-toc .toc-item:hover { background: var(--accent-light); color: var(--accent); }
     .doc-toc .toc-item.toc-h2 { padding-left: 10px; }
@@ -1407,7 +1410,7 @@ function renderDocPage(docId) {
       <div class="doc-toc-inner">
         ${toc.length > 0
           ? toc.map((h, i) => `
-            <div class="toc-item toc-h${h.level}" onclick="scrollToHeading('h-${i}')" id="toc-h-${i}">
+            <div class="toc-item toc-h${h.level}" onclick="scrollToHeading('h-${i}')" id="toc-h-${i}" title="${esc(h.title).replace(/"/g, '&quot;')}">
               ${esc(h.title)}
             </div>
           `).join('')

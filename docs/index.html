@@ -968,6 +968,25 @@
       box-shadow: 0 2px 12px rgba(0,0,0,0.2);
       font-weight: 500;
     }
+    /* Custom TOC tooltip — instant, no delay */
+    #tocTooltip {
+      position: fixed;
+      pointer-events: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      z-index: 1001;
+      display: none;
+      white-space: nowrap;
+      max-width: 400px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+      font-weight: 500;
+    }
     .graph-node line { transition: opacity 0.3s, stroke-width 0.3s; }
     /* Graph filter states */
     .graph-node.hidden { opacity: 0.08; pointer-events: none; }
@@ -1065,6 +1084,8 @@
 
 <!-- Custom graph tooltip (instant, no delay) -->
 <div id="graphTooltip"></div>
+<!-- Custom TOC tooltip (instant, no delay) -->
+<div id="tocTooltip"></div>
 
 <script>
 // ============================================================
@@ -1748,7 +1769,7 @@ function renderDocPage(docId) {
       <div class="doc-toc-inner">
         ${toc.length > 0
           ? toc.map((h, i) => `
-            <div class="toc-item toc-h${h.level}" onclick="scrollToHeading('h-${i}')" id="toc-h-${i}" title="${esc(h.title).replace(/"/g, '&quot;')}">
+            <div class="toc-item toc-h${h.level}" onclick="scrollToHeading('h-${i}')" id="toc-h-${i}" data-fulltitle="${esc(h.title).replace(/"/g, '&quot;')}">
               ${esc(h.title)}
             </div>
           `).join('')
@@ -1796,6 +1817,8 @@ function renderDocPage(docId) {
     }
     // Add copy buttons to code blocks
     addCopyButtons();
+    // Instant TOC tooltip — no delay
+    setupTocTooltip();
   }, 100);
 
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
@@ -1876,6 +1899,35 @@ function scrollToHeading(id) {
     document.querySelectorAll('.toc-item').forEach(item => item.classList.remove('toc-active'));
     document.getElementById('toc-' + id)?.classList.add('toc-active');
   }
+}
+
+// Instant TOC tooltip — no browser title delay
+function setupTocTooltip() {
+  const tip = document.getElementById('tocTooltip');
+  const toc = document.querySelector('.doc-toc');
+  if (!tip || !toc) return;
+  
+  toc.addEventListener('mouseover', (e) => {
+    const item = e.target.closest('.toc-item');
+    if (!item) { tip.style.display = 'none'; return; }
+    const title = item.getAttribute('data-fulltitle');
+    if (!title) return;
+    tip.textContent = title;
+    tip.style.display = 'block';
+  });
+  
+  toc.addEventListener('mousemove', (e) => {
+    const item = e.target.closest('.toc-item');
+    if (!item) { tip.style.display = 'none'; return; }
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top = (e.clientY - 10) + 'px';
+  });
+  
+  toc.addEventListener('mouseout', (e) => {
+    const item = e.target.closest('.toc-item');
+    if (item && item.contains(e.relatedTarget)) return; // still inside same item
+    tip.style.display = 'none';
+  });
 }
 
 function updateTocActive() {

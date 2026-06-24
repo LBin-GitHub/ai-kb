@@ -144,8 +144,36 @@
     }
     .search-wrapper {
       flex: 1;
-      max-width: 480px;
+      max-width: 520px;
       position: relative;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .search-mode-tabs {
+      display: flex;
+      flex-shrink: 0;
+      margin-right: 8px;
+    }
+    .search-mode-tab {
+      padding: 4px 12px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-family: var(--font-sans);
+      transition: all 0.15s;
+    }
+    .search-mode-tab:first-child { border-radius: 6px 0 0 6px; }
+    .search-mode-tab:last-child { border-radius: 0 6px 6px 0; }
+    .search-mode-tab.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .search-mode-tab:hover:not(.active) {
+      background: var(--accent-light);
     }
     .search-wrapper input {
       width: 100%;
@@ -855,10 +883,16 @@
 
     /* Graph SVG styles */
     .graph-node { cursor: pointer; }
-    .graph-node circle { transition: opacity 0.2s, filter 0.2s; }
+    .graph-node circle { transition: opacity 0.3s, filter 0.3s, stroke-width 0.3s; }
     .graph-node:hover circle { filter: brightness(1.15) drop-shadow(0 2px 8px rgba(0,0,0,0.25)); }
     .graph-node:hover circle[stroke-dasharray] { filter: none; }
-    .graph-node text { pointer-events: none; user-select: none; }
+    .graph-node text { pointer-events: none; user-select: none; transition: opacity 0.3s, fill 0.3s, font-weight 0.3s; }
+    .graph-node line { transition: opacity 0.3s, stroke-width 0.3s; }
+    /* Graph filter states */
+    .graph-node.hidden { opacity: 0.08; pointer-events: none; }
+    .graph-node.hidden circle { stroke-width: 1; }
+    .graph-node.highlighted circle { filter: brightness(1.2) drop-shadow(0 0 12px rgba(79,70,229,0.6)); stroke-width: 4; }
+    .graph-node.highlighted text { fill: #4f46e5; font-weight: 700; font-size: 13px; }
     .graph-link { stroke-opacity: 0.45; }
 
     /* Mobile responsive */
@@ -894,11 +928,15 @@
   <!-- Top bar with search -->
   <div class="topbar">
     <div class="search-wrapper">
+      <div class="search-mode-tabs">
+        <button class="search-mode-tab active" id="searchModeGraph" onclick="setSearchMode('graph')">图谱</button>
+        <button class="search-mode-tab" id="searchModeDoc" onclick="setSearchMode('doc')">文档</button>
+      </div>
       <span class="search-icon">🔍</span>
       <input
         type="text"
         id="searchInput"
-        placeholder="搜索文档标题或内容..."
+        placeholder="搜索图谱节点..."
         oninput="handleSearch(this.value)"
         onfocus="handleSearch(this.value)"
         onblur="setTimeout(() => hideSearch(), 200)"
@@ -941,7 +979,29 @@
 let data = null;
 let currentDocId = null;
 let tocCollapsed = localStorage.getItem('tocCollapsed') === 'true';
+let searchMode = 'graph'; // 'graph' or 'doc'
+let graphFilter = null; // { visibleIds: Set, highlightedIds: Set } or null
 const DEEPSEEK_API_KEY = 'sk-09caa3f74c0d40' + '89977853b1a9165814';
+
+function setSearchMode(mode) {
+  searchMode = mode;
+  document.getElementById('searchModeGraph').classList.toggle('active', mode === 'graph');
+  document.getElementById('searchModeDoc').classList.toggle('active', mode === 'doc');
+  const input = document.getElementById('searchInput');
+  if (mode === 'graph') {
+    input.placeholder = '搜索图谱节点...';
+  } else {
+    input.placeholder = '搜索文档标题或内容...';
+  }
+  // Clear results on mode switch
+  hideSearch();
+  input.value = '';
+  // If on homepage, rerender with cleared filter
+  if (currentDocId === null && graphFilter) {
+    graphFilter = null;
+    renderHomepage();
+  }
+}
 
 async function loadData() {
   try {
@@ -1055,6 +1115,9 @@ function toggleChildren(item) {
 // ============================================================
 function showHome() {
   currentDocId = null;
+  graphFilter = null;
+  document.getElementById('searchInput').value = '';
+  hideSearch();
   document.getElementById('btnGraph').classList.add('active');
   document.getElementById('btnDoc').classList.remove('active');
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
@@ -1099,6 +1162,54 @@ function openDoc(docId) {
   document.getElementById('btnDoc').classList.add('active');
   currentDocId = docId;
   renderDocPage(docId);
+}
+
+// Show graph centered on a specific doc + its connected neighbors
+function showGraphForDoc(docId) {
+  currentDocId = null;
+  document.getElementById('btnGraph').classList.add('active');
+  document.getElementById('btnDoc').classList.remove('active');
+  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+
+  // Build connectivity map
+  const connected = new Map(); // nodeId -> Set of connected nodeIds
+  for (const e of data.graph.edges) {
+    if (!connected.has(e.source)) connected.set(e.source, new Set());
+    if (!connected.has(e.target)) connected.set(e.target, new Set());
+    connected.get(e.source).add(e.target);
+    connected.get(e.target).add(e.source);
+  }
+  // Also add tree edges
+  function walkTreeConn(nodes, parentId) {
+    for (const node of nodes) {
+      if (parentId) {
+        if (!connected.has(parentId)) connected.set(parentId, new Set());
+        if (!connected.has(node.id)) connected.set(node.id, new Set());
+        connected.get(parentId).add(node.id);
+        connected.get(node.id).add(parentId);
+      }
+      if (node.children) walkTreeConn(node.children, node.id);
+    }
+  }
+  walkTreeConn(data.tree, null);
+
+  // Compute visible set: target + 1-hop neighbors
+  const visibleIds = new Set([docId]);
+  const highlightedIds = new Set([docId]);
+  const neighbors = connected.get(docId);
+  if (neighbors) {
+    for (const nid of neighbors) {
+      visibleIds.add(nid);
+    }
+  }
+
+  graphFilter = { visibleIds, highlightedIds };
+  if (!data || data.graph.nodes.length === 0) {
+    document.getElementById('contentArea').innerHTML =
+      '<div class="empty-state"><div class="emoji">🌌</div><h2>知识图谱为空</h2></div>';
+    return;
+  }
+  renderHomepage();
 }
 
 // ============================================================
@@ -1207,6 +1318,10 @@ function drawGraph() {
     edgeList.push({ source: e.source, target: e.target, type: 'cross' });
   }
 
+  // Apply graph filter if active
+  const visibleIds = graphFilter ? graphFilter.visibleIds : null;
+  const highlightedIds = graphFilter ? graphFilter.highlightedIds : null;
+
   // Node visuals
   const nodeSize = (depth) => 28 - depth * 5;
 
@@ -1234,14 +1349,16 @@ function drawGraph() {
     line.setAttribute('x2', tp.x);
     line.setAttribute('y2', tp.y);
 
+    const linkVisible = !visibleIds || (visibleIds.has(edge.source) && visibleIds.has(edge.target));
+
     if (edge.type === 'tree') {
       line.setAttribute('stroke', '#8884d8');
-      line.setAttribute('stroke-width', '2.5');
-      line.setAttribute('stroke-opacity', '0.55');
+      line.setAttribute('stroke-width', linkVisible ? '2.5' : '0.5');
+      line.setAttribute('stroke-opacity', linkVisible ? '0.55' : '0.06');
     } else {
       line.setAttribute('stroke', '#f59e0b');
-      line.setAttribute('stroke-width', '1.5');
-      line.setAttribute('stroke-opacity', '0.35');
+      line.setAttribute('stroke-width', linkVisible ? '1.5' : '0.5');
+      line.setAttribute('stroke-opacity', linkVisible ? '0.35' : '0.06');
       line.setAttribute('stroke-dasharray', '6 4');
     }
     linkGroup.appendChild(line);
@@ -1252,7 +1369,14 @@ function drawGraph() {
   for (const [id, pos] of Object.entries(positions)) {
     const g = document.createElementNS(svgNS, 'g');
     g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
-    g.className.baseVal = 'graph-node';
+
+    const isVisible = !visibleIds || visibleIds.has(id);
+    const isHighlighted = highlightedIds && highlightedIds.has(id);
+
+    let cls = 'graph-node';
+    if (!isVisible) cls += ' hidden';
+    if (isHighlighted) cls += ' highlighted';
+    g.className.baseVal = cls;
 
     const doc = data.documents.find(d => d.id === id);
     const isFolder = doc && doc.isFolder;
@@ -1265,7 +1389,7 @@ function drawGraph() {
 
     const r = isFolder ? 18 - pos.depth * 3 : nodeSize(pos.depth);
 
-    if (!isFolder) {
+    if (!isFolder && isVisible) {
       g.setAttribute('cursor', 'pointer');
       g.onclick = () => openDoc(id);
     } else {
@@ -1439,11 +1563,17 @@ function renderDocPage(docId) {
         <h3>🔗 反向链接 (${backlinks.length})</h3>
         ${backlinks.length === 0
           ? '<div class="bl-empty">暂无反向链接<br><small>在文档中引用本文标题可建立链接</small></div>'
-          : backlinks.map(bl => `
-            <div class="bl-item" onclick="openDoc('${bl.id}')">
-              ${bl.autoDetected ? '📎 ' : '🔗 '}${esc(bl.title)}
-            </div>
-          `).join('')
+          : backlinks.map(bl => {
+              const blDoc = data.documents.find(d => d.id === bl.id);
+              const isFolder = blDoc && blDoc.isFolder;
+              const action = isFolder ? `showGraphForDoc('${bl.id}')` : `openDoc('${bl.id}')`;
+              const icon = bl.autoDetected ? '📎' : '🔗';
+              const hint = isFolder ? '<span style="font-size:10px;color:var(--accent);margin-left:4px;">图谱</span>' : '';
+              return `
+            <div class="bl-item" onclick="${action}">
+              ${icon} ${esc(bl.title)}${hint}
+            </div>`;
+            }).join('')
         }
       </div>
     </div>
@@ -1615,18 +1745,103 @@ function handleSearch(query) {
   const resultsDiv = document.getElementById('searchResults');
   if (!query || query.trim().length < 1) {
     resultsDiv.classList.remove('show');
+    // If in graph mode, clear filter
+    if (searchMode === 'graph' && graphFilter) {
+      graphFilter = null;
+      renderHomepage();
+    }
     return;
   }
 
   const q = query.toLowerCase().trim();
+
+  if (searchMode === 'graph') {
+    // Graph mode: find matching nodes and show them + neighbors
+    handleGraphSearch(q);
+    return;
+  }
+
+  // Doc mode: existing behavior
+  handleDocSearch(q);
+}
+
+function handleGraphSearch(q) {
+  const resultsDiv = document.getElementById('searchResults');
+
+  // Build connectivity map
+  const connected = new Map();
+  for (const e of data.graph.edges) {
+    if (!connected.has(e.source)) connected.set(e.source, new Set());
+    if (!connected.has(e.target)) connected.set(e.target, new Set());
+    connected.get(e.source).add(e.target);
+    connected.get(e.target).add(e.source);
+  }
+  function walkTreeConn(nodes, parentId) {
+    for (const node of nodes) {
+      if (parentId) {
+        if (!connected.has(parentId)) connected.set(parentId, new Set());
+        if (!connected.has(node.id)) connected.set(node.id, new Set());
+        connected.get(parentId).add(node.id);
+        connected.get(node.id).add(parentId);
+      }
+      if (node.children) walkTreeConn(node.children, node.id);
+    }
+  }
+  walkTreeConn(data.tree, null);
+
+  // Find matching documents
+  const matchingIds = new Set();
+  const results = [];
+  for (const doc of data.documents) {
+    if (doc.title.toLowerCase().includes(q) || doc.content.toLowerCase().includes(q)) {
+      matchingIds.add(doc.id);
+      results.push(doc);
+    }
+  }
+
+  if (results.length === 0) {
+    resultsDiv.innerHTML = '<div class="no-results">未找到匹配的图谱节点</div>';
+    resultsDiv.classList.add('show');
+    // Still clear graph filter
+    graphFilter = null;
+    renderHomepage();
+    return;
+  }
+
+  // Compute visible: matching + 1-hop neighbors
+  const visibleIds = new Set(matchingIds);
+  for (const mid of matchingIds) {
+    const neighbors = connected.get(mid);
+    if (neighbors) {
+      for (const nid of neighbors) visibleIds.add(nid);
+    }
+  }
+
+  graphFilter = { visibleIds, highlightedIds: matchingIds };
+
+  // Show search results as list
+  resultsDiv.innerHTML = results.map(r => `
+    <div class="search-result-item" onclick="showGraphForDoc('${r.id}');hideSearch();">
+      <div class="result-title">${esc(r.title)} <span style="font-size:11px;color:var(--text-muted);">查看图谱</span></div>
+      <div class="result-snippet">${esc(r.summary.substring(0, 80))}</div>
+    </div>
+  `).join('');
+  resultsDiv.classList.add('show');
+
+  // Rerender graph with filter
+  if (!data || data.graph.nodes.length === 0) return;
+  renderHomepage();
+}
+
+function handleDocSearch(q) {
+  const resultsDiv = document.getElementById('searchResults');
   const results = [];
 
   for (const doc of data.documents) {
     const titleMatch = fuzzyMatch(doc.title.toLowerCase(), q);
     const contentMatch = fuzzyMatch(doc.content.toLowerCase(), q);
-    
+
     if (titleMatch.score > 0.2 || contentMatch.score > 0.3) {
-      // Extract snippet around match
       let snippet = '';
       const contentLower = doc.content.toLowerCase();
       const idx = contentLower.indexOf(q);
@@ -1634,18 +1849,13 @@ function handleSearch(query) {
         const start = Math.max(0, idx - 30);
         const end = Math.min(doc.content.length, idx + q.length + 60);
         snippet = (start > 0 ? '...' : '') + doc.content.substring(start, end) + (end < doc.content.length ? '...' : '');
-        // Highlight the match
         const regex = new RegExp(`(${escRegex(q)})`, 'gi');
         snippet = esc(snippet).replace(regex, '<em>$1</em>');
       } else {
         snippet = doc.summary.substring(0, 100);
       }
 
-      results.push({
-        doc,
-        score: Math.max(titleMatch.score, contentMatch.score),
-        snippet,
-      });
+      results.push({ doc, score: Math.max(titleMatch.score, contentMatch.score), snippet });
     }
   }
 

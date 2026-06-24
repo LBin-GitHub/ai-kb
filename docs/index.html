@@ -248,30 +248,6 @@
       font-size: 13px;
     }
 
-    .view-toggle {
-      display: flex;
-      gap: 4px;
-      background: var(--bg-sidebar);
-      border-radius: 8px;
-      padding: 3px;
-    }
-    .view-toggle button {
-      padding: 6px 12px;
-      border: none;
-      background: none;
-      font-size: 13px;
-      cursor: pointer;
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-family: var(--font-sans);
-      transition: all 0.15s;
-    }
-    .view-toggle button.active {
-      background: var(--bg-card);
-      color: var(--accent);
-      box-shadow: var(--shadow);
-      font-weight: 500;
-    }
     .last-sync {
       font-size: 12px;
       color: var(--text-dim);
@@ -943,10 +919,6 @@
       >
       <div class="search-results" id="searchResults"></div>
     </div>
-    <div class="view-toggle">
-      <button id="btnGraph" class="active" onclick="showHome()">图谱</button>
-      <button id="btnDoc" onclick="showDoc()">文档</button>
-    </div>
     <div class="last-sync" id="lastSync"></div>
   </div>
 
@@ -996,10 +968,17 @@ function setSearchMode(mode) {
   // Clear results on mode switch
   hideSearch();
   input.value = '';
-  // If on homepage, rerender with cleared filter
-  if (currentDocId === null && graphFilter) {
+  // Switch view accordingly
+  if (mode === 'graph') {
+    if (graphFilter) { graphFilter = null; }
+    showHome();
+  } else {
     graphFilter = null;
-    renderHomepage();
+    if (currentDocId) {
+      renderDocPage(currentDocId);
+    } else {
+      showDoc();
+    }
   }
 }
 
@@ -1118,8 +1097,9 @@ function showHome() {
   graphFilter = null;
   document.getElementById('searchInput').value = '';
   hideSearch();
-  document.getElementById('btnGraph').classList.add('active');
-  document.getElementById('btnDoc').classList.remove('active');
+  document.getElementById('searchModeGraph').classList.add('active');
+  document.getElementById('searchModeDoc').classList.remove('active');
+  searchMode = 'graph';
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
 
   if (!data || data.graph.nodes.length === 0) {
@@ -1131,10 +1111,16 @@ function showHome() {
 }
 
 function showDoc(docId) {
-  if (!docId && !currentDocId) return;
+  if (!docId && !currentDocId) {
+    // No doc open — open the first non-folder document
+    const firstDoc = data?.documents?.find(d => !d.isFolder);
+    if (firstDoc) currentDocId = firstDoc.id;
+    else return;
+  }
   if (docId) currentDocId = docId;
-  document.getElementById('btnGraph').classList.remove('active');
-  document.getElementById('btnDoc').classList.add('active');
+  document.getElementById('searchModeGraph').classList.remove('active');
+  document.getElementById('searchModeDoc').classList.add('active');
+  searchMode = 'doc';
   renderDocPage(currentDocId);
 }
 
@@ -1158,8 +1144,9 @@ function openDoc(docId) {
   if (!doc || doc.isFolder) return; // Don't open folders
 
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('btnGraph').classList.remove('active');
-  document.getElementById('btnDoc').classList.add('active');
+  document.getElementById('searchModeGraph').classList.remove('active');
+  document.getElementById('searchModeDoc').classList.add('active');
+  searchMode = 'doc';
   currentDocId = docId;
   renderDocPage(docId);
 }
@@ -1167,8 +1154,9 @@ function openDoc(docId) {
 // Show graph centered on a specific doc + its connected neighbors
 function showGraphForDoc(docId) {
   currentDocId = null;
-  document.getElementById('btnGraph').classList.add('active');
-  document.getElementById('btnDoc').classList.remove('active');
+  document.getElementById('searchModeGraph').classList.add('active');
+  document.getElementById('searchModeDoc').classList.remove('active');
+  searchMode = 'graph';
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
 
   // Build connectivity map
@@ -1403,32 +1391,96 @@ function drawGraph() {
     }
 
     // Outer ring (depth indicator)
-    const outerRing = document.createElementNS(svgNS, 'circle');
-    outerRing.setAttribute('r', r + 3);
-    outerRing.setAttribute('fill', 'none');
-    outerRing.setAttribute('stroke', dm.color);
-    outerRing.setAttribute('stroke-width', '1.5');
-    outerRing.setAttribute('stroke-opacity', pos.depth === 0 ? '0.5' : '0.25');
-    g.appendChild(outerRing);
-
-    // Main circle
-    const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('r', r);
-    circle.setAttribute('fill', isFolder ? '#e0e0e0' : dm.color);
-    circle.setAttribute('stroke', isFolder ? '#c0c0c0' : dm.color);
-    circle.setAttribute('stroke-width', pos.depth === 0 ? '3' : '2');
-    circle.setAttribute('opacity', isFolder ? '0.6' : pos.depth === 0 ? '0.95' : '0.8');
-    circle.setAttribute('stroke-dasharray', isFolder ? '5 3' : 'none');
-    g.appendChild(circle);
-
     if (isFolder) {
-      const icon = document.createElementNS(svgNS, 'text');
-      icon.setAttribute('text-anchor', 'middle');
-      icon.setAttribute('dy', '0.35em');
-      icon.setAttribute('font-size', '11');
-      icon.setAttribute('font-family', '-apple-system, sans-serif');
-      icon.textContent = '📁';
-      g.appendChild(icon);
+      // Hexagon outer ring for folder nodes
+      const outerR = r + 5;
+      const sqrt32 = 0.866;
+      const outerPoints = [
+        [outerR, 0], [outerR / 2, outerR * sqrt32], [-outerR / 2, outerR * sqrt32],
+        [-outerR, 0], [-outerR / 2, -outerR * sqrt32], [outerR / 2, -outerR * sqrt32]
+      ].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+      const outerHex = document.createElementNS(svgNS, 'polygon');
+      outerHex.setAttribute('points', outerPoints);
+      outerHex.setAttribute('fill', 'none');
+      outerHex.setAttribute('stroke', dm.color);
+      outerHex.setAttribute('stroke-width', '1.5');
+      outerHex.setAttribute('stroke-opacity', '0.35');
+      outerHex.setAttribute('stroke-dasharray', '4 4');
+      g.appendChild(outerHex);
+    } else {
+      const outerRing = document.createElementNS(svgNS, 'circle');
+      outerRing.setAttribute('r', r + 3);
+      outerRing.setAttribute('fill', 'none');
+      outerRing.setAttribute('stroke', dm.color);
+      outerRing.setAttribute('stroke-width', '1.5');
+      outerRing.setAttribute('stroke-opacity', pos.depth === 0 ? '0.5' : '0.25');
+      g.appendChild(outerRing);
+    }
+
+    // Main circle or folder hexagon
+    if (isFolder) {
+      // Hexagon shape — visually distinct "container" for grouping
+      const hexR = r + 2;
+      const sqrt32 = 0.866; // √3/2
+      const hexPoints = [
+        [hexR, 0],
+        [hexR / 2, hexR * sqrt32],
+        [-hexR / 2, hexR * sqrt32],
+        [-hexR, 0],
+        [-hexR / 2, -hexR * sqrt32],
+        [hexR / 2, -hexR * sqrt32]
+      ].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+
+      const hex = document.createElementNS(svgNS, 'polygon');
+      hex.setAttribute('points', hexPoints);
+      hex.setAttribute('fill', '#e8e8f0');
+      hex.setAttribute('stroke', '#b0b0c8');
+      hex.setAttribute('stroke-width', pos.depth === 0 ? '2.5' : '1.5');
+      hex.setAttribute('stroke-dasharray', '5 3');
+      hex.setAttribute('opacity', '0.75');
+      g.appendChild(hex);
+
+      // Inner smaller hexagon for depth
+      const innerR = hexR * 0.55;
+      const innerPoints = [
+        [innerR, 0],
+        [innerR / 2, innerR * sqrt32],
+        [-innerR / 2, innerR * sqrt32],
+        [-innerR, 0],
+        [-innerR / 2, -innerR * sqrt32],
+        [innerR / 2, -innerR * sqrt32]
+      ].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+
+      const innerHex = document.createElementNS(svgNS, 'polygon');
+      innerHex.setAttribute('points', innerPoints);
+      innerHex.setAttribute('fill', '#d4d4e0');
+      innerHex.setAttribute('stroke', '#a0a0b8');
+      innerHex.setAttribute('stroke-width', '1');
+      innerHex.setAttribute('opacity', '0.7');
+      g.appendChild(innerHex);
+
+      // Child count badge
+      const childCount = (childrenMap[id] || []).length;
+      if (childCount > 0) {
+        const countText = document.createElementNS(svgNS, 'text');
+        countText.setAttribute('text-anchor', 'middle');
+        countText.setAttribute('dy', '0.35em');
+        countText.setAttribute('font-size', String(Math.max(9, r * 0.65)));
+        countText.setAttribute('font-weight', '700');
+        countText.setAttribute('fill', '#6b6b8a');
+        countText.setAttribute('font-family', '-apple-system, sans-serif');
+        countText.setAttribute('pointer-events', 'none');
+        countText.textContent = String(childCount);
+        g.appendChild(countText);
+      }
+    } else {
+      const circle = document.createElementNS(svgNS, 'circle');
+      circle.setAttribute('r', r);
+      circle.setAttribute('fill', dm.color);
+      circle.setAttribute('stroke', dm.color);
+      circle.setAttribute('stroke-width', pos.depth === 0 ? '3' : '2');
+      circle.setAttribute('opacity', pos.depth === 0 ? '0.95' : '0.8');
+      g.appendChild(circle);
     }
 
     // Label

@@ -479,23 +479,55 @@
       border-radius: 4px;
       color: #d63384;
     }
-    .doc-content pre {
+    .doc-content .code-block-wrapper {
+      position: relative;
+      margin: 16px 0;
+    }
+    .doc-content .code-block-wrapper pre {
       background: #1e1e2e;
       color: #cdd6f4;
-      padding: 16px 20px;
+      padding: 36px 20px 16px;
       border-radius: 8px;
       overflow-x: auto;
-      margin: 16px 0;
+      margin: 0;
       line-height: 1.6;
       font-size: 13px;
     }
-    .doc-content pre code {
+    .doc-content .code-block-wrapper pre code {
       background: none;
       color: inherit;
       padding: 0;
       border-radius: 0;
       font-size: inherit;
       user-select: all;
+    }
+    .doc-content .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.55);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--font-sans);
+      transition: all 0.15s;
+      z-index: 1;
+    }
+    .doc-content .copy-btn:hover {
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.85);
+      border-color: rgba(255,255,255,0.3);
+    }
+    .doc-content .copy-btn.copied {
+      color: #4ade80;
+      border-color: #4ade80;
+      background: rgba(74,222,128,0.12);
     }
     /* Tables */
     .doc-content table {
@@ -1751,6 +1783,8 @@ function renderDocPage(docId) {
     if (docPage) {
       docPage.addEventListener('scroll', updateTocActive);
     }
+    // Add copy buttons to code blocks
+    addCopyButtons();
   }, 100);
 
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
@@ -1843,6 +1877,49 @@ function updateTocActive() {
   }
   document.querySelectorAll('.toc-item').forEach(item => {
     item.classList.toggle('toc-active', item.id === 'toc-' + currentId);
+  });
+}
+
+// Add copy buttons to all <pre> code blocks in the doc body
+function addCopyButtons() {
+  const docBody = document.getElementById('docBody');
+  if (!docBody) return;
+  const pres = docBody.querySelectorAll('pre');
+  pres.forEach(pre => {
+    // Skip if already wrapped
+    if (pre.parentElement.classList.contains('code-block-wrapper')) return;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block-wrapper';
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制';
+    btn.addEventListener('click', () => {
+      const code = pre.textContent || '';
+      navigator.clipboard.writeText(code).then(() => {
+        btn.classList.add('copied');
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 已复制';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> 复制';
+        }, 2000);
+      }).catch(err => {
+        console.warn('Copy failed, using fallback:', err);
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch(e) {}
+        document.body.removeChild(ta);
+        btn.classList.add('copied');
+        btn.textContent = '已复制';
+        setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '复制'; }, 2000);
+      });
+    });
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(pre);
+    wrapper.appendChild(btn);
   });
 }
 

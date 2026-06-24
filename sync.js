@@ -183,6 +183,27 @@ async function main() {
   const edges = [];
   const edgeSet = new Set();
 
+  // Build nodeToken → doc.id map for parent-child resolution
+  const nodeTokenToId = {};
+  for (const doc of documents) {
+    if (doc.nodeToken) nodeTokenToId[doc.nodeToken] = doc.id;
+  }
+
+  // Edges from wiki tree: parent ↔ child
+  for (const doc of documents) {
+    if (doc.parentToken) {
+      const parentId = nodeTokenToId[doc.parentToken];
+      if (parentId && parentId !== doc.id) {
+        const edgeKey = [doc.id, parentId].sort().join('|');
+        if (!edgeSet.has(edgeKey)) {
+          edgeSet.add(edgeKey);
+          edges.push({ source: doc.id, target: parentId });
+        }
+      }
+    }
+  }
+
+  // Edges from explicit [[links]] in content
   for (const doc of documents) {
     for (const link of doc.links) {
       const targetId = titleToId[link];
@@ -197,12 +218,18 @@ async function main() {
     // Auto-link based on title mentions in content
     for (const other of documents) {
       if (other.id === doc.id) continue;
+      // Try full title, short title, and cleaned title (no brackets)
+      const cleanedTitle = other.title.replace(/[（(][^)）]*[)）]/g, '').trim();
       const shortTitle = other.title.split(/[：:|：/·]+/).pop()?.trim();
-      if (shortTitle && shortTitle.length >= 3 && doc.content.includes(shortTitle)) {
-        const edgeKey = [doc.id, other.id].sort().join('|');
-        if (!edgeSet.has(edgeKey)) {
-          edgeSet.add(edgeKey);
-          edges.push({ source: doc.id, target: other.id, autoDetected: true });
+      const candidates = [other.title, ...(shortTitle && shortTitle !== other.title ? [shortTitle] : []), ...(cleanedTitle && cleanedTitle !== other.title && cleanedTitle !== shortTitle ? [cleanedTitle] : [])];
+      for (const candidate of candidates) {
+        if (candidate && candidate.length >= 3 && doc.content.includes(candidate)) {
+          const edgeKey = [doc.id, other.id].sort().join('|');
+          if (!edgeSet.has(edgeKey)) {
+            edgeSet.add(edgeKey);
+            edges.push({ source: doc.id, target: other.id, autoDetected: true });
+          }
+          break; // one match is enough
         }
       }
     }

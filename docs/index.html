@@ -1258,6 +1258,11 @@ function drawGraph() {
     const isFolder = doc && doc.isFolder;
     const dm = depthMap[id] || { depth: 0, color: '#999' };
 
+    // Tooltip: full title
+    const tooltipEl = document.createElementNS(svgNS, 'title');
+    tooltipEl.textContent = doc ? doc.title : id;
+    g.appendChild(tooltipEl);
+
     const r = isFolder ? 18 - pos.depth * 3 : nodeSize(pos.depth);
 
     if (!isFolder) {

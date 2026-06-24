@@ -1,5 +1,5 @@
 {
-  "generated": "2026-06-24T05:23:45.855Z",
+  "generated": "2026-06-24T06:19:52.659Z",
   "spaceId": "7652314514440031192",
   "tree": [
     {
@@ -90,7 +90,7 @@
         "id": "GI1WdVOnqouCZwxOJLZcqgSBndR",
         "title": "AI 学习之路基础篇（7）",
         "tags": [],
-        "weight": 1
+        "weight": 3
       },
       {
         "id": "EuLCdvObiotYjLxPjoJccKmsnoe",
@@ -108,29 +108,76 @@
         "id": "H1qcdSUA2oBGwzxwwHecyiDxnCe",
         "title": "01.AI 世界入门词典：小白必备概念清单",
         "tags": [],
-        "weight": 1
+        "weight": 2
       },
       {
         "id": "UIiVdu5tdo0ZenxEMHxcWUi9nBY",
         "title": "02.AI 学习之路之「工具如何选」",
         "tags": [],
-        "weight": 1
+        "weight": 2
       },
       {
         "id": "GSs0dne1ToLmLgxPtzbcItj1nXf",
         "title": "03.AI 学习之路之「学会跟 AI 说话：Prompt 从入门到精通」",
         "tags": [],
-        "weight": 1
+        "weight": 2
       }
     ],
-    "edges": []
+    "edges": [
+      {
+        "source": "H1qcdSUA2oBGwzxwwHecyiDxnCe",
+        "target": "GI1WdVOnqouCZwxOJLZcqgSBndR"
+      },
+      {
+        "source": "UIiVdu5tdo0ZenxEMHxcWUi9nBY",
+        "target": "GI1WdVOnqouCZwxOJLZcqgSBndR"
+      },
+      {
+        "source": "GSs0dne1ToLmLgxPtzbcItj1nXf",
+        "target": "GI1WdVOnqouCZwxOJLZcqgSBndR"
+      }
+    ]
   },
   "backlinks": {
-    "GI1WdVOnqouCZwxOJLZcqgSBndR": [],
+    "GI1WdVOnqouCZwxOJLZcqgSBndR": [
+      {
+        "id": "H1qcdSUA2oBGwzxwwHecyiDxnCe",
+        "title": "01.AI 世界入门词典：小白必备概念清单",
+        "autoDetected": false
+      },
+      {
+        "id": "UIiVdu5tdo0ZenxEMHxcWUi9nBY",
+        "title": "02.AI 学习之路之「工具如何选」",
+        "autoDetected": false
+      },
+      {
+        "id": "GSs0dne1ToLmLgxPtzbcItj1nXf",
+        "title": "03.AI 学习之路之「学会跟 AI 说话：Prompt 从入门到精通」",
+        "autoDetected": false
+      }
+    ],
     "EuLCdvObiotYjLxPjoJccKmsnoe": [],
     "M2a6d47IcocGT5x5GyEc1EA3nzc": [],
-    "H1qcdSUA2oBGwzxwwHecyiDxnCe": [],
-    "UIiVdu5tdo0ZenxEMHxcWUi9nBY": [],
-    "GSs0dne1ToLmLgxPtzbcItj1nXf": []
+    "H1qcdSUA2oBGwzxwwHecyiDxnCe": [
+      {
+        "id": "GI1WdVOnqouCZwxOJLZcqgSBndR",
+        "title": "AI 学习之路基础篇（7）",
+        "autoDetected": false
+      }
+    ],
+    "UIiVdu5tdo0ZenxEMHxcWUi9nBY": [
+      {
+        "id": "GI1WdVOnqouCZwxOJLZcqgSBndR",
+        "title": "AI 学习之路基础篇（7）",
+        "autoDetected": false
+      }
+    ],
+    "GSs0dne1ToLmLgxPtzbcItj1nXf": [
+      {
+        "id": "GI1WdVOnqouCZwxOJLZcqgSBndR",
+        "title": "AI 学习之路基础篇（7）",
+        "autoDetected": false
+      }
+    ]
   }
 }

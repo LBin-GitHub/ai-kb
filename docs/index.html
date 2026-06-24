@@ -175,9 +175,14 @@
     .search-mode-tab:hover:not(.active) {
       background: var(--accent-light);
     }
-    .search-wrapper input {
+    .search-input-group {
+      flex: 1;
+      position: relative;
+      display: flex;
+    }
+    .search-input-group input {
       width: 100%;
-      padding: 8px 14px 8px 36px;
+      padding: 8px 36px 8px 36px;
       border: 1px solid var(--border);
       border-radius: 8px;
       font-size: 14px;
@@ -187,11 +192,11 @@
       transition: border-color 0.2s;
       font-family: var(--font-sans);
     }
-    .search-wrapper input:focus {
+    .search-input-group input:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
     }
-    .search-wrapper .search-icon {
+    .search-input-group .search-icon {
       position: absolute;
       left: 12px;
       top: 50%;
@@ -199,7 +204,7 @@
       font-size: 14px;
       color: var(--text-dim);
     }
-    .search-wrapper .search-clear {
+    .search-input-group .search-clear {
       position: absolute;
       right: 10px;
       top: 50%;
@@ -935,16 +940,18 @@
         <button class="search-mode-tab active" id="searchModeGraph" onclick="setSearchMode('graph')">图谱</button>
         <button class="search-mode-tab" id="searchModeDoc" onclick="setSearchMode('doc')">文档</button>
       </div>
-      <span class="search-icon">🔍</span>
-      <input
-        type="text"
-        id="searchInput"
-        placeholder="搜索图谱节点..."
-        oninput="handleSearch(this.value)"
-        onfocus="handleSearch(this.value)"
-        onblur="setTimeout(() => hideSearch(), 200)"
-      >
-      <button class="search-clear" id="searchClear" onclick="resetSearch()" title="清除搜索">✕</button>
+      <div class="search-input-group">
+        <span class="search-icon">🔍</span>
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="搜索图谱节点..."
+          oninput="handleSearch(this.value)"
+          onfocus="handleSearch(this.value)"
+          onblur="setTimeout(() => hideSearch(), 200)"
+        >
+        <button class="search-clear" id="searchClear" onclick="resetSearch()" title="清除搜索">✕</button>
+      </div>
       <div class="search-results" id="searchResults"></div>
     </div>
     <div class="last-sync" id="lastSync"></div>
@@ -1519,6 +1526,7 @@ function drawGraph() {
     label.setAttribute('fill', pos.depth === 0 ? '#1a1a1a' : '#4a4a4a');
     label.setAttribute('font-weight', pos.depth === 0 ? '600' : '400');
     label.setAttribute('font-family', '-apple-system, sans-serif');
+    label.setAttribute('pointer-events', 'none');
     const docTitle = doc ? doc.title : id;
     label.textContent = docTitle.length > 14 ? docTitle.substring(0, 13) + '…' : docTitle;
     g.appendChild(label);

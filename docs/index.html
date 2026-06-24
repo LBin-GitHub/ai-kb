@@ -916,7 +916,26 @@
     .graph-node circle { transition: opacity 0.3s, filter 0.3s, stroke-width 0.3s; }
     .graph-node:hover circle { filter: brightness(1.15) drop-shadow(0 2px 8px rgba(0,0,0,0.25)); }
     .graph-node:hover circle[stroke-dasharray] { filter: none; }
-    .graph-node text { pointer-events: none; user-select: none; transition: opacity 0.3s, fill 0.3s, font-weight 0.3s; }
+    .graph-node text { user-select: none; transition: opacity 0.3s, fill 0.3s, font-weight 0.3s; }
+    /* Custom graph tooltip — instant, no delay */
+    #graphTooltip {
+      position: fixed;
+      pointer-events: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: var(--font-sans);
+      z-index: 1000;
+      display: none;
+      white-space: nowrap;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+      font-weight: 500;
+    }
     .graph-node line { transition: opacity 0.3s, stroke-width 0.3s; }
     /* Graph filter states */
     .graph-node.hidden { opacity: 0.08; pointer-events: none; }
@@ -1000,6 +1019,9 @@
     <button id="ragSend" onclick="askRag()">发送</button>
   </div>
 </div>
+
+<!-- Custom graph tooltip (instant, no delay) -->
+<div id="graphTooltip"></div>
 
 <script>
 // ============================================================
@@ -1435,10 +1457,8 @@ function drawGraph() {
     const isFolder = doc && doc.isFolder;
     const dm = depthMap[id] || { depth: 0, color: '#999' };
 
-    // Tooltip: full title
-    const tooltipEl = document.createElementNS(svgNS, 'title');
-    tooltipEl.textContent = doc ? doc.title : id;
-    g.appendChild(tooltipEl);
+    // Custom tooltip: mouseenter/mousemove/mouseleave on group
+    const fullTitle = doc ? doc.title : id;
 
     const r = isFolder ? 18 - pos.depth * 3 : nodeSize(pos.depth);
 
@@ -1553,16 +1573,10 @@ function drawGraph() {
     const docTitle = doc ? doc.title : id;
     const truncated = docTitle.length > 14 ? docTitle.substring(0, 13) + '…' : docTitle;
     label.textContent = truncated;
-    // Tooltip on text label itself — shows full title even when truncated
-    if (docTitle.length > 14) {
-      const labelTitle = document.createElementNS(svgNS, 'title');
-      labelTitle.textContent = docTitle;
-      label.appendChild(labelTitle);
-    }
     g.appendChild(label);
 
     nodeGroup.appendChild(g);
-    nodeEls.push({ g, id, pos, r });
+    nodeEls.push({ g, id, pos, r, fullTitle, isFolder });
   }
 
   // Drag + zoom
@@ -1589,9 +1603,12 @@ function drawGraph() {
   });
 
   svg.addEventListener('mousemove', (e) => {
+    const mx = (e.offsetX - panX) / scale;
+    const my = (e.offsetY - panY) / scale;
+
     if (dragNode) {
-      dragNode.pos.x = (e.offsetX - panX) / scale - dragOffX;
-      dragNode.pos.y = (e.offsetY - panY) / scale - dragOffY;
+      dragNode.pos.x = mx - dragOffX;
+      dragNode.pos.y = my - dragOffY;
       dragNode.g.setAttribute('transform', `translate(${dragNode.pos.x},${dragNode.pos.y})`);
       // Update lines touching this node
       const lines = linkGroup.querySelectorAll('line');
@@ -1608,10 +1625,35 @@ function drawGraph() {
         li++;
       }
     }
-    svg.style.cursor = dragNode ? 'grabbing' : '';
+
+    // Instant custom tooltip — no delay
+    const tip = document.getElementById('graphTooltip');
+    let hovered = null;
+    for (const el of nodeEls) {
+      const dx = mx - el.pos.x, dy = my - el.pos.y;
+      const hitR = el.r + 24; // generous hit area covers both icon and text
+      if (Math.sqrt(dx * dx + dy * dy) < hitR) {
+        hovered = el;
+        break;
+      }
+    }
+    if (hovered) {
+      tip.textContent = hovered.fullTitle;
+      tip.style.display = 'block';
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY - 32) + 'px';
+    } else {
+      tip.style.display = 'none';
+    }
+
+    svg.style.cursor = dragNode ? 'grabbing' : (hovered && !hovered.isFolder ? 'pointer' : '');
   });
 
   svg.addEventListener('mouseup', () => { dragNode = null; });
+
+  svg.addEventListener('mouseleave', () => {
+    document.getElementById('graphTooltip').style.display = 'none';
+  });
 
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -1759,6 +1801,8 @@ function mdToHtmlWithIds(md, docTitle) {
     if (typeof marked !== 'undefined' && marked.parse) {
       marked.setOptions({ breaks: true, gfm: true });
       html = marked.parse(c);
+      // Strip any <h1> from HTML body — title is displayed separately, avoids duplication
+      html = html.replace(/<h1[^>]*>[\s\S]*?<\/h1>/i, '');
     }
   } catch(e) {
     console.warn('marked failed, falling back');  

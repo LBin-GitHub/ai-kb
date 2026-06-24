@@ -1217,10 +1217,16 @@ function showGraphForDoc(docId) {
 // ============================================================
 function renderHomepage() {
   const area = document.getElementById('contentArea');
+  const visibleCount = graphFilter ? graphFilter.visibleIds.size : data.graph.nodes.length;
+  const highlightedCount = graphFilter ? graphFilter.highlightedIds.size : 0;
+  const filterHint = graphFilter
+    ? `<div class="graph-hint" style="color:var(--accent);font-weight:600;">🔍 筛选模式：显示 ${visibleCount} 个节点（${highlightedCount} 个匹配） <span style="cursor:pointer;text-decoration:underline;" onclick="showHome()">清除筛选</span></div>`
+    : '<div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 实线=层级关系 · 虚线=内容关联 · 点击打开文档</div>';
+
   area.innerHTML = `
     <div class="homepage">
       <div class="graph-container" id="graphContainer"></div>
-      <div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 实线=层级关系 · 虚线=内容关联 · 点击打开文档</div>
+      ${filterHint}
       <div class="stats">
         <div class="stat"><div class="num">${data.documents.length}</div><div class="label">文档</div></div>
         <div class="stat"><div class="num">${data.graph.edges.length}</div><div class="label">链接</div></div>

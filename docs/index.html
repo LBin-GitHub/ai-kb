@@ -199,6 +199,33 @@
       font-size: 14px;
       color: var(--text-dim);
     }
+    .search-wrapper .search-clear {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: none;
+      background: var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 22px;
+      text-align: center;
+      cursor: pointer;
+      display: none;
+      font-family: var(--font-sans);
+      padding: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .search-wrapper .search-clear:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+    .search-wrapper .search-clear.visible {
+      display: block;
+    }
     .search-results {
       display: none;
       position: absolute;
@@ -917,6 +944,7 @@
         onfocus="handleSearch(this.value)"
         onblur="setTimeout(() => hideSearch(), 200)"
       >
+      <button class="search-clear" id="searchClear" onclick="resetSearch()" title="清除搜索">✕</button>
       <div class="search-results" id="searchResults"></div>
     </div>
     <div class="last-sync" id="lastSync"></div>
@@ -1801,8 +1829,11 @@ function applyHighlight(query) {
 // ============================================================
 function handleSearch(query) {
   const resultsDiv = document.getElementById('searchResults');
+  const clearBtn = document.getElementById('searchClear');
+
   if (!query || query.trim().length < 1) {
     resultsDiv.classList.remove('show');
+    clearBtn.classList.remove('visible');
     // If in graph mode, clear filter
     if (searchMode === 'graph' && graphFilter) {
       graphFilter = null;
@@ -1811,6 +1842,7 @@ function handleSearch(query) {
     return;
   }
 
+  clearBtn.classList.add('visible');
   const q = query.toLowerCase().trim();
 
   if (searchMode === 'graph') {
@@ -1934,6 +1966,18 @@ function handleDocSearch(q) {
 
 function hideSearch() {
   document.getElementById('searchResults').classList.remove('show');
+}
+
+function resetSearch() {
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  hideSearch();
+  document.getElementById('searchClear').classList.remove('visible');
+  if (searchMode === 'graph' && graphFilter) {
+    graphFilter = null;
+    renderHomepage();
+  }
+  input.focus();
 }
 
 // Simple fuzzy match (substring + Levenshtein-inspired scoring)

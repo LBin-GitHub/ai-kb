@@ -426,6 +426,47 @@
     }
     .graph-node.unborn { opacity: 0 !important; pointer-events: none !important; }
     .graph-node.unborn * { opacity: 0 !important; }
+
+    /* Hover connection highlighting — Obsidian-style */
+    .graph-node.hover-dim { opacity: 0.1 !important; transition: opacity 0.2s; }
+    .graph-node.hover-dim * { opacity: 0.1 !important; transition: opacity 0.2s; }
+    .graph-node.hover-source { z-index: 10; }
+    .graph-node.hover-source circle,
+    .graph-node.hover-source polygon { filter: brightness(1.35) drop-shadow(0 0 10px rgba(79,70,229,0.5)); stroke-width: 3px !important; stroke: #4f46e5 !important; }
+    .graph-node.hover-connected { filter: brightness(1.1); }
+    .graph-node.hover-connected circle,
+    .graph-node.hover-connected polygon { stroke: #818cf8; stroke-width: 2px !important; }
+    .graph-node.hover-connected text { font-weight: 600 !important; fill: #4f46e5 !important; }
+
+    /* Context menu */
+    .graph-context-menu {
+      position: fixed;
+      background: #fff;
+      border: 1px solid #e2e2e6;
+      border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.12);
+      z-index: 9999;
+      min-width: 160px;
+      padding: 4px 0;
+      display: none;
+      font-size: 13px;
+    }
+    .graph-context-menu .ctx-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .12s;
+    }
+    .graph-context-menu .ctx-item:hover { background: var(--accent); color: #fff; }
+    .graph-context-menu .ctx-separator { height: 1px; background: #e2e2e6; margin: 4px 0; }
+
+    /* Keyboard hint */
+    .graph-key-hint {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      font-size: 11px; color: #999; pointer-events: none;
+      background: rgba(255,255,255,.85); padding: 4px 12px; border-radius: 12px;
+      border: 1px solid #eee;
+    }
     .homepage .graph-hint {
       position: absolute;
       bottom: 10px;
@@ -1177,6 +1218,13 @@
 <div id="graphTooltip"></div>
 <!-- Custom TOC tooltip (instant, no delay) -->
 <div id="tocTooltip"></div>
+<!-- Right-click context menu for graph -->
+<div class="graph-context-menu" id="graphCtxMenu">
+  <div class="ctx-item" id="ctx-open-doc">📄 打开文档</div>
+  <div class="ctx-item" id="ctx-show-graph">🔍 图谱聚焦</div>
+  <div class="ctx-separator"></div>
+  <div class="ctx-item" id="ctx-reset-view">↺ 重置视图</div>
+</div>
 
 <script>
 // ============================================================
@@ -1194,6 +1242,8 @@ let growthAnimating = false; // growth animation playing
 let growthProgress = 1; // 0-1, default=1 (fully grown)
 let growthSpeed = 1; // speed multiplier
 let growthTimer = null; // animation timer
+let forceLayout = null; // { positions, refCounts } — computed once, reused for growth animation
+let forceLayoutVersion = 0; // increment to force recompute
 const HIDDEN_DOC_IDS = new Set(['M2a6d47IcocGT5x5GyEc1EA3nzc']); // Add doc IDs to hide from sidebar/search/graph
 const DEEPSEEK_API_KEY = 'sk-09caa3f74c0d40' + '89977853b1a9165814';
 
@@ -1459,7 +1509,7 @@ function renderHomepage() {
   const highlightedCount = graphFilter ? graphFilter.highlightedIds.size : 0;
   const filterHint = graphFilter
     ? `<div class="graph-hint" style="color:var(--accent);font-weight:600;">🔍 筛选模式：显示 ${visibleCount} 个节点（${highlightedCount} 个匹配）</div>`
-    : '<div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 实线=层级关系 · 虚线=内容关联 · 点击打开文档</div>';
+    : '<div class="graph-hint">🖱 拖拽节点 · 滚轮缩放 · 悬停高亮关联 · 右键菜单 · +/- 缩放 · 方向键平移 · 0 键重置</div>';
 
   // Build growth time range
   const timestamps = data.documents
@@ -1507,144 +1557,227 @@ function renderHomepage() {
   setTimeout(() => drawGraph(), 50);
 }
 
-function drawGraph() {
+// ============================================================
+// FORCE-DIRECTED GRAPH LAYOUT (Obsidian-style)
+// ============================================================
+
+function computeReferenceCounts() {
+  const refCounts = {};
+  for (const doc of data.documents) {
+    refCounts[doc.id] = 0;
+  }
+  // Count backlinks as references
+  for (const [docId, bls] of Object.entries(data.backlinks || {})) {
+    refCounts[docId] = (refCounts[docId] || 0) + bls.length;
+  }
+  // Also count graph edges as references
+  for (const e of data.graph.edges) {
+    if (refCounts[e.source] !== undefined) refCounts[e.source]++;
+    if (refCounts[e.target] !== undefined) refCounts[e.target]++;
+  }
+  return refCounts;
+}
+
+function nodeRadius(refCount, isFolder) {
+  if (isFolder) return 16;
+  const minR = 7, maxR = 22;
+  if (refCount <= 0) return minR;
+  const scaled = minR + Math.log2(refCount + 1) * 3.5;
+  return Math.min(maxR, Math.max(minR, scaled));
+}
+
+function runForceSimulation(nodeIds, edgeList, refCounts, W, H) {
+  const positions = {};
+  const velocities = {};
+  const centerX = W / 2;
+  const centerY = H / 2;
+  const pad = 60;
+
+  // Adjacency map
+  const adj = {};
+  for (const id of nodeIds) adj[id] = new Set();
+  for (const edge of edgeList) {
+    if (adj[edge.source] && adj[edge.target]) {
+      adj[edge.source].add(edge.target);
+      adj[edge.target].add(edge.source);
+    }
+  }
+
+  // Init positions near center with small random spread
+  for (const id of nodeIds) {
+    positions[id] = {
+      x: centerX + (Math.random() - 0.5) * 40,
+      y: centerY + (Math.random() - 0.5) * 40,
+    };
+    velocities[id] = { vx: 0, vy: 0 };
+  }
+
+  const dt = 1;
+  const damping = 0.82;
+  const centerStrength = 0.008;
+  const repelStrength = 800;
+  const linkStrength = 0.004;
+  const idealLinkLen = 100;
+  const maxVel = 8;
+  const maxIterations = 200;
+  const earlyStopThreshold = 0.08;
+
+  let alpha = 1;
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    alpha = 1 - iter / maxIterations;
+
+    const forces = {};
+    for (const id of nodeIds) forces[id] = { fx: 0, fy: 0 };
+
+    // 1. Center force
+    for (const id of nodeIds) {
+      const p = positions[id];
+      forces[id].fx += (centerX - p.x) * centerStrength * alpha;
+      forces[id].fy += (centerY - p.y) * centerStrength * alpha;
+    }
+
+    // 2. Repel between all pairs
+    const ids = nodeIds;
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i], b = ids[j];
+        const pa = positions[a], pb = positions[b];
+        const dx = pa.x - pb.x, dy = pa.y - pb.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.max(1, Math.sqrt(distSq));
+        const force = (repelStrength * alpha) / Math.max(10, distSq);
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        forces[a].fx += fx;
+        forces[a].fy += fy;
+        forces[b].fx -= fx;
+        forces[b].fy -= fy;
+      }
+    }
+
+    // 3. Link attraction
+    for (const edge of edgeList) {
+      const sp = positions[edge.source], tp = positions[edge.target];
+      if (!sp || !tp) continue;
+      const dx = tp.x - sp.x, dy = tp.y - sp.y;
+      const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      const force = (dist - idealLinkLen) * linkStrength * alpha;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      forces[edge.source].fx += fx;
+      forces[edge.source].fy += fy;
+      forces[edge.target].fx -= fx;
+      forces[edge.target].fy -= fy;
+    }
+
+    // Apply forces
+    let totalEnergy = 0;
+    for (const id of nodeIds) {
+      const v = velocities[id];
+      const f = forces[id];
+      v.vx = (v.vx + f.fx * dt) * damping;
+      v.vy = (v.vy + f.fy * dt) * damping;
+      const speed = Math.sqrt(v.vx * v.vx + v.vy * v.vy);
+      if (speed > maxVel) {
+        v.vx = (v.vx / speed) * maxVel;
+        v.vy = (v.vy / speed) * maxVel;
+      }
+      positions[id].x += v.vx;
+      positions[id].y += v.vy;
+      positions[id].x = Math.max(pad, Math.min(W - pad, positions[id].x));
+      positions[id].y = Math.max(pad, Math.min(H - pad, positions[id].y));
+      totalEnergy += speed;
+    }
+
+    if (totalEnergy / nodeIds.length < earlyStopThreshold && iter > 20) break;
+  }
+
+  return positions;
+}
+
+function drawGraph(skipLayout) {
   const container = document.getElementById('graphContainer');
   if (!container) return;
 
   const W = container.clientWidth;
   const H = container.clientHeight;
-  const pad = 70;
 
-  // Build tree-based hierarchy
-  const depthMap = {}; // nodeId -> { depth, parentId, color }
-  const childrenMap = {}; // nodeId -> [childIds]
+  // Build tree hierarchy for coloring + edge building
+  const depthMap = {};
+  const childrenMap = {};
+  const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#0891b2', '#be185d'];
 
   function walkTree(nodes, parentId, depth, colorIdx) {
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       const branchColor = depth === 0 ? COLORS[i % COLORS.length] : colorIdx;
-      depthMap[node.id] = {
-        depth,
-        parentId: parentId || null,
-        color: branchColor,
-      };
+      depthMap[node.id] = { depth, parentId: parentId || null, color: branchColor };
       childrenMap[node.id] = (node.children || []).map(c => c.id);
       if (node.children && node.children.length > 0) {
         walkTree(node.children, node.id, depth + 1, branchColor);
       }
     }
   }
-
-  const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626', '#0891b2', '#be185d'];
   walkTree(data.tree, null, 0, 0);
 
-  // Collect all unique node IDs from tree + graph
   const allIds = new Set();
   for (const n of data.graph.nodes) allIds.add(n.id);
   for (const id of Object.keys(depthMap)) allIds.add(id);
 
-  // ============================================
-  // NEW LAYOUT: Parent-centered tree spreading
-  // ============================================
-  const positions = {};
-  const subtreeSize = {};
-
-  function getSubtreeSize(id) {
-    if (subtreeSize[id] !== undefined) return subtreeSize[id];
-    const kids = childrenMap[id] || [];
-    if (kids.length === 0) return subtreeSize[id] = 1;
-    return subtreeSize[id] = 1 + kids.reduce((sum, c) => sum + getSubtreeSize(c), 0);
-  }
-
-  // Place roots with spacing proportional to subtree size
-  const rootIds = data.tree.map(n => n.id);
-  const totalSubtreeSize = rootIds.reduce((sum, id) => sum + getSubtreeSize(id), 0);
-  const usableWidth = Math.max(W - pad * 2, 200);
-  let xCursor = pad + 20;
-
-  for (let i = 0; i < rootIds.length; i++) {
-    const id = rootIds[i];
-    const size = getSubtreeSize(id);
-    const branchWidth = (size / totalSubtreeSize) * usableWidth;
-    const x = xCursor + branchWidth / 2;
-    const jitterY = (Math.random() - 0.5) * 20;
-    positions[id] = { x: x, y: pad + 30 + jitterY, depth: 0 };
-    placeChildren(id, x, branchWidth, positions[id].y, 1);
-    xCursor += branchWidth;
-  }
-
-  // Recursive child placement: children spread in a fan below their parent
-  function placeChildren(parentId, parentX, parentWidth, parentY, depth) {
-    const children = childrenMap[parentId] || [];
-    if (children.length === 0) return;
-    const childY = parentY + 130;
-    const minSpacing = 90;
-    const spacing = Math.max(minSpacing, parentWidth / (children.length + 1));
-    const totalWidth = spacing * (children.length - 1);
-    let startX = parentX - totalWidth / 2;
-    for (let i = 0; i < children.length; i++) {
-      const childId = children[i];
-      const jitterX = (Math.random() - 0.5) * 15;
-      const jitterY = (Math.random() - 0.5) * 10;
-      positions[childId] = {
-        x: startX + spacing * i + jitterX,
-        y: Math.max(pad + 50, Math.min(H - pad - 50, childY + jitterY)),
-        depth: depth,
-      };
-      const childWidth = parentWidth / children.length;
-      placeChildren(childId, positions[childId].x, childWidth, positions[childId].y, depth + 1);
-    }
-  }
-
-  // Orphan nodes (in graph but not in tree)
-  for (const id of allIds) {
-    if (!positions[id]) {
-      positions[id] = {
-        x: W / 2 + (Math.random() - 0.5) * 150,
-        y: H / 2 + (Math.random() - 0.5) * 150,
-        depth: 0,
-      };
-    }
-  }
-
-  // Build edge list: tree edges + graph edges
+  // Edge list
   const edgeList = [];
-
-  // Tree edges (parent -> child)
   for (const [parentId, childIds] of Object.entries(childrenMap)) {
     for (const childId of childIds) {
       edgeList.push({ source: parentId, target: childId, type: 'tree' });
     }
   }
-
-  // Cross-reference edges from graph
   for (const e of data.graph.edges) {
     edgeList.push({ source: e.source, target: e.target, type: 'cross' });
   }
 
-  // Apply graph filter if active
+  const refCounts = computeReferenceCounts();
+
+  // Run or reuse force simulation
+  let positions;
+  if (skipLayout && forceLayout && forceLayout.positions) {
+    positions = forceLayout.positions;
+  } else {
+    const simIds = [...allIds].filter(id => !HIDDEN_DOC_IDS.has(id));
+    positions = runForceSimulation(simIds, edgeList.filter(e => !HIDDEN_DOC_IDS.has(e.source) && !HIDDEN_DOC_IDS.has(e.target)), refCounts, W, H);
+    forceLayout = { positions, refCounts, edgeList };
+  }
+
+  // Filters
   const visibleIds = graphFilter ? graphFilter.visibleIds : null;
   const highlightedIds = graphFilter ? graphFilter.highlightedIds : null;
 
-  // Growth animation: determine which nodes are "born" at current progress
+  // Growth: born nodes
   const bornIds = new Set();
   if (growthProgress < 1) {
     for (const id of allIds) {
       if (HIDDEN_DOC_IDS.has(id)) continue;
-      const bp = getNodeBornProgress(id);
-      if (bp <= growthProgress) bornIds.add(id);
+      if (getNodeBornProgress(id) <= growthProgress) bornIds.add(id);
     }
   }
-  const animateBirth = growthProgress < 1; // false when animation complete (show all)
+  const animateBirth = growthProgress < 1;
 
-  // Node visuals
-  const nodeSize = (depth) => 28 - depth * 5;
+  // Adjacency for hover highlight
+  const adj = {};
+  for (const id of allIds) adj[id] = new Set();
+  for (const edge of edgeList) {
+    if (adj[edge.source] && adj[edge.target]) {
+      adj[edge.source].add(edge.target);
+      adj[edge.target].add(edge.source);
+    }
+  }
 
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
   svg.setAttribute('width', W);
   svg.setAttribute('height', H);
+  svg.setAttribute('tabindex', '0');
   container.appendChild(svg);
 
   const linkGroup = document.createElementNS(svgNS, 'g');
@@ -1653,6 +1786,8 @@ function drawGraph() {
   svg.appendChild(nodeGroup);
 
   // Draw links
+  const linkEls = [];
+  const edgeRef = [];
   for (const edge of edgeList) {
     const sp = positions[edge.source];
     const tp = positions[edge.target];
@@ -1660,35 +1795,35 @@ function drawGraph() {
     if (HIDDEN_DOC_IDS.has(edge.source) || HIDDEN_DOC_IDS.has(edge.target)) continue;
 
     const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('x1', sp.x);
-    line.setAttribute('y1', sp.y);
-    line.setAttribute('x2', tp.x);
-    line.setAttribute('y2', tp.y);
+    line.setAttribute('x1', sp.x); line.setAttribute('y1', sp.y);
+    line.setAttribute('x2', tp.x); line.setAttribute('y2', tp.y);
 
     const linkVisible = !visibleIds || (visibleIds.has(edge.source) && visibleIds.has(edge.target));
-    // Growth animation: hide edges where either endpoint is unborn
     const edgeBorn = !animateBirth || (bornIds.has(edge.source) && bornIds.has(edge.target));
-    const edgeOpacity = linkVisible && edgeBorn ? (edge.type === 'tree' ? '0.55' : '0.35') : '0';
 
     if (edge.type === 'tree') {
       line.setAttribute('stroke', '#8884d8');
-      line.setAttribute('stroke-width', (linkVisible && edgeBorn) ? '2.5' : '0');
-      line.setAttribute('stroke-opacity', edgeOpacity);
+      line.setAttribute('stroke-width', (linkVisible && edgeBorn) ? '2' : '0');
+      line.setAttribute('stroke-opacity', linkVisible && edgeBorn ? '0.45' : '0');
     } else {
       line.setAttribute('stroke', '#f59e0b');
-      line.setAttribute('stroke-width', (linkVisible && edgeBorn) ? '1.5' : '0');
-      line.setAttribute('stroke-opacity', edgeOpacity);
+      line.setAttribute('stroke-width', (linkVisible && edgeBorn) ? '1.2' : '0');
+      line.setAttribute('stroke-opacity', linkVisible && edgeBorn ? '0.3' : '0');
       line.setAttribute('stroke-dasharray', '6 4');
     }
+    line.classList.add('graph-link');
     linkGroup.appendChild(line);
+    linkEls.push(line);
+    edgeRef.push(edge);
   }
 
   // Draw nodes
   const nodeEls = [];
   for (const [id, pos] of Object.entries(positions)) {
     if (HIDDEN_DOC_IDS.has(id)) continue;
+
     const g = document.createElementNS(svgNS, 'g');
-    g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+    g.setAttribute('transform', 'translate(' + pos.x + ',' + pos.y + ')');
 
     const isVisible = !visibleIds || visibleIds.has(id);
     const isHighlighted = highlightedIds && highlightedIds.has(id);
@@ -1702,31 +1837,28 @@ function drawGraph() {
     const doc = data.documents.find(d => d.id === id);
     const isFolder = doc && doc.isFolder;
     const dm = depthMap[id] || { depth: 0, color: '#999' };
-
-    // Custom tooltip: mouseenter/mousemove/mouseleave on group
     const fullTitle = doc ? doc.title : id;
-
-    const r = isFolder ? 18 - pos.depth * 3 : nodeSize(pos.depth);
+    const rc = refCounts[id] || 0;
+    const r = nodeRadius(rc, isFolder);
 
     const nodeClickable = !isFolder && isVisible && (!animateBirth || bornIds.has(id));
     if (nodeClickable) {
       g.setAttribute('cursor', 'pointer');
-      g.onclick = () => openDoc(id);
+      g.addEventListener('click', () => openDoc(id));
     } else {
       g.setAttribute('cursor', 'default');
     }
 
-    // Outer ring (depth indicator)
+    // Outer ring
     if (isFolder) {
-      // Hexagon outer ring for folder nodes
       const outerR = r + 5;
-      const sqrt32 = 0.866;
-      const outerPoints = [
-        [outerR, 0], [outerR / 2, outerR * sqrt32], [-outerR / 2, outerR * sqrt32],
-        [-outerR, 0], [-outerR / 2, -outerR * sqrt32], [outerR / 2, -outerR * sqrt32]
-      ].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+      const s3 = 0.866;
+      const op = [
+        [outerR, 0], [outerR / 2, outerR * s3], [-outerR / 2, outerR * s3],
+        [-outerR, 0], [-outerR / 2, -outerR * s3], [outerR / 2, -outerR * s3]
+      ].map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
       const outerHex = document.createElementNS(svgNS, 'polygon');
-      outerHex.setAttribute('points', outerPoints);
+      outerHex.setAttribute('points', op);
       outerHex.setAttribute('fill', 'none');
       outerHex.setAttribute('stroke', dm.color);
       outerHex.setAttribute('stroke-width', '1.5');
@@ -1739,121 +1871,110 @@ function drawGraph() {
       outerRing.setAttribute('fill', 'none');
       outerRing.setAttribute('stroke', dm.color);
       outerRing.setAttribute('stroke-width', '1.5');
-      outerRing.setAttribute('stroke-opacity', pos.depth === 0 ? '0.5' : '0.25');
+      outerRing.setAttribute('stroke-opacity', '0.25');
       g.appendChild(outerRing);
     }
 
-    // Main circle or folder hexagon
+    // Main shape
     if (isFolder) {
-      // Hexagon shape — visually distinct "container" for grouping
       const hexR = r + 2;
-      const sqrt32 = 0.866; // √3/2
-      const hexPoints = [
-        [hexR, 0],
-        [hexR / 2, hexR * sqrt32],
-        [-hexR / 2, hexR * sqrt32],
-        [-hexR, 0],
-        [-hexR / 2, -hexR * sqrt32],
-        [hexR / 2, -hexR * sqrt32]
-      ].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-
+      const s3 = 0.866;
+      const hp = [
+        [hexR, 0], [hexR / 2, hexR * s3], [-hexR / 2, hexR * s3],
+        [-hexR, 0], [-hexR / 2, -hexR * s3], [hexR / 2, -hexR * s3]
+      ].map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
       const hex = document.createElementNS(svgNS, 'polygon');
-      hex.setAttribute('points', hexPoints);
+      hex.setAttribute('points', hp);
       hex.setAttribute('fill', '#e8e8f0');
       hex.setAttribute('stroke', '#b0b0c8');
-      hex.setAttribute('stroke-width', pos.depth === 0 ? '2.5' : '1.5');
+      hex.setAttribute('stroke-width', '2');
       hex.setAttribute('stroke-dasharray', '5 3');
       hex.setAttribute('opacity', '0.75');
       g.appendChild(hex);
 
-      // Inner smaller hexagon for depth
       const innerR = hexR * 0.55;
-      const innerPoints = [
-        [innerR, 0],
-        [innerR / 2, innerR * sqrt32],
-        [-innerR / 2, innerR * sqrt32],
-        [-innerR, 0],
-        [-innerR / 2, -innerR * sqrt32],
-        [innerR / 2, -innerR * sqrt32]
-      ].map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-
+      const ip = [
+        [innerR, 0], [innerR / 2, innerR * s3], [-innerR / 2, innerR * s3],
+        [-innerR, 0], [-innerR / 2, -innerR * s3], [innerR / 2, -innerR * s3]
+      ].map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
       const innerHex = document.createElementNS(svgNS, 'polygon');
-      innerHex.setAttribute('points', innerPoints);
+      innerHex.setAttribute('points', ip);
       innerHex.setAttribute('fill', '#d4d4e0');
       innerHex.setAttribute('stroke', '#a0a0b8');
       innerHex.setAttribute('stroke-width', '1');
       innerHex.setAttribute('opacity', '0.7');
       g.appendChild(innerHex);
 
-      // Child count badge
       const childCount = (childrenMap[id] || []).length;
       if (childCount > 0) {
-        const countText = document.createElementNS(svgNS, 'text');
-        countText.setAttribute('text-anchor', 'middle');
-        countText.setAttribute('dy', '0.35em');
-        countText.setAttribute('font-size', String(Math.max(9, r * 0.65)));
-        countText.setAttribute('font-weight', '700');
-        countText.setAttribute('fill', '#6b6b8a');
-        countText.setAttribute('font-family', '-apple-system, sans-serif');
-        countText.setAttribute('pointer-events', 'none');
-        countText.textContent = String(childCount);
-        g.appendChild(countText);
+        const ct = document.createElementNS(svgNS, 'text');
+        ct.setAttribute('text-anchor', 'middle');
+        ct.setAttribute('dy', '0.35em');
+        ct.setAttribute('font-size', Math.max(9, r * 0.65));
+        ct.setAttribute('font-weight', '700');
+        ct.setAttribute('fill', '#6b6b8a');
+        ct.setAttribute('font-family', '-apple-system, sans-serif');
+        ct.setAttribute('pointer-events', 'none');
+        ct.textContent = String(childCount);
+        g.appendChild(ct);
       }
     } else {
       const circle = document.createElementNS(svgNS, 'circle');
       circle.setAttribute('r', r);
       circle.setAttribute('fill', dm.color);
       circle.setAttribute('stroke', dm.color);
-      circle.setAttribute('stroke-width', pos.depth === 0 ? '3' : '2');
-      circle.setAttribute('opacity', pos.depth === 0 ? '0.95' : '0.8');
+      circle.setAttribute('stroke-width', '2');
+      circle.setAttribute('opacity', '0.85');
       g.appendChild(circle);
     }
 
     // Label
     const label = document.createElementNS(svgNS, 'text');
     label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('dy', r + (pos.depth === 0 ? 16 : 13));
-    label.setAttribute('font-size', pos.depth === 0 ? '12' : '10');
-    label.setAttribute('fill', pos.depth === 0 ? '#1a1a1a' : '#4a4a4a');
-    label.setAttribute('font-weight', pos.depth === 0 ? '700' : '400');
+    label.setAttribute('dy', r + 14);
+    label.setAttribute('font-size', '10');
+    label.setAttribute('fill', '#4a4a4a');
+    label.setAttribute('font-weight', '400');
     label.setAttribute('font-family', '-apple-system, sans-serif');
     const docTitle = doc ? doc.title : id;
-    const maxLen = pos.depth === 0 ? 12 : 10;
-    const truncated = docTitle.length > maxLen ? docTitle.substring(0, maxLen - 1) + '…' : docTitle;
+    const maxLen = 11;
+    const truncated = docTitle.length > maxLen ? docTitle.substring(0, maxLen - 1) + '\u2026' : docTitle;
     label.textContent = truncated;
     g.appendChild(label);
 
     nodeGroup.appendChild(g);
-    nodeEls.push({ g, id, pos, r, fullTitle, isFolder });
+    nodeEls.push({ g, id, pos, r, fullTitle, isFolder, isVisible, refCount: rc });
   }
 
-  // Drag + zoom
+  // ============================================================
+  // INTERACTIONS
+  // ============================================================
   let dragNode = null, dragOffX = 0, dragOffY = 0;
   let scale = 1, panX = 0, panY = 0;
-  let dragGroupOffsets = new Map(); // descendantId -> {ox, oy}
+  let dragGroupOffsets = new Map();
 
   function applyTransform() {
-    nodeGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
-    linkGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
+    nodeGroup.setAttribute('transform', 'translate(' + panX + ',' + panY + ') scale(' + scale + ')');
+    linkGroup.setAttribute('transform', 'translate(' + panX + ',' + panY + ') scale(' + scale + ')');
   }
 
+  // --- Drag ---
   svg.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
     const mx = (e.offsetX - panX) / scale;
     const my = (e.offsetY - panY) / scale;
     for (const el of nodeEls) {
-      const dx = mx - el.pos.x, dy = my - el.pos.y;
-      // Skip unborn nodes (during growth animation)
       if (animateBirth && !bornIds.has(el.id)) continue;
+      const dx = mx - el.pos.x, dy = my - el.pos.y;
       if (Math.sqrt(dx * dx + dy * dy) < el.r + 10) {
         dragNode = el;
         dragOffX = dx;
         dragOffY = dy;
-
-        // Build drag group: all descendants move together
         dragGroupOffsets = new Map();
         function collectDescendants(id) {
           const kids = childrenMap[id] || [];
           for (const childId of kids) {
+            if (!positions[childId]) continue;
             dragGroupOffsets.set(childId, {
               ox: positions[childId].x - positions[dragNode.id].x,
               oy: positions[childId].y - positions[dragNode.id].y,
@@ -1878,9 +1999,8 @@ function drawGraph() {
       const deltaY = newY - dragNode.pos.y;
       dragNode.pos.x = newX;
       dragNode.pos.y = newY;
-      dragNode.g.setAttribute('transform', `translate(${newX},${newY})`);
+      dragNode.g.setAttribute('transform', 'translate(' + newX + ',' + newY + ')');
 
-      // Move all descendants together with the parent
       for (const [descId, offsets] of dragGroupOffsets) {
         const descPos = positions[descId];
         if (descPos) {
@@ -1888,43 +2008,66 @@ function drawGraph() {
           descPos.y += deltaY;
           const descEl = nodeEls.find(el => el.id === descId);
           if (descEl && descEl.g) {
-            descEl.g.setAttribute('transform', `translate(${descPos.x},${descPos.y})`);
+            descEl.g.setAttribute('transform', 'translate(' + descPos.x + ',' + descPos.y + ')');
           }
         }
       }
 
-      // Update all edges touching any node in the drag group
       const groupIds = new Set([dragNode.id, ...dragGroupOffsets.keys()]);
-      const lines = linkGroup.querySelectorAll('line');
-      let li = 0;
-      for (const edge of edgeList) {
+      for (let li = 0; li < linkEls.length; li++) {
+        const edge = edgeRef[li];
         if (groupIds.has(edge.source) || groupIds.has(edge.target)) {
-          const sp = positions[edge.source];
-          const tp = positions[edge.target];
-          if (sp && tp && lines[li]) {
-            lines[li].setAttribute('x1', sp.x); lines[li].setAttribute('y1', sp.y);
-            lines[li].setAttribute('x2', tp.x); lines[li].setAttribute('y2', tp.y);
+          const sp = positions[edge.source], tp = positions[edge.target];
+          if (sp && tp) {
+            linkEls[li].setAttribute('x1', sp.x); linkEls[li].setAttribute('y1', sp.y);
+            linkEls[li].setAttribute('x2', tp.x); linkEls[li].setAttribute('y2', tp.y);
           }
         }
-        li++;
       }
     }
 
-    // Instant custom tooltip — no delay
+    // --- Hover tooltip + highlight ---
     const tip = document.getElementById('graphTooltip');
     let hovered = null;
     for (const el of nodeEls) {
-      // Skip unborn nodes during growth animation
       if (animateBirth && !bornIds.has(el.id)) continue;
       const dx = mx - el.pos.x, dy = my - el.pos.y;
-      const hitR = el.r + 24; // generous hit area covers both icon and text
-      if (Math.sqrt(dx * dx + dy * dy) < hitR) {
+      if (Math.sqrt(dx * dx + dy * dy) < el.r + 22) {
         hovered = el;
         break;
       }
     }
+
+    if (hovered && !dragNode) {
+      const connected = adj[hovered.id] || new Set();
+      for (const el of nodeEls) {
+        if (el.id === hovered.id) {
+          el.g.classList.add('hover-source');
+          el.g.classList.remove('hover-dim', 'hover-connected');
+        } else if (connected.has(el.id)) {
+          el.g.classList.add('hover-connected');
+          el.g.classList.remove('hover-dim', 'hover-source');
+        } else {
+          el.g.classList.add('hover-dim');
+          el.g.classList.remove('hover-source', 'hover-connected');
+        }
+      }
+      for (let li = 0; li < linkEls.length; li++) {
+        const edge = edgeRef[li];
+        const isConnected = edge.source === hovered.id || edge.target === hovered.id ||
+          (connected.has(edge.source) && connected.has(edge.target));
+        linkEls[li].style.opacity = isConnected ? '1' : '0.08';
+        linkEls[li].style.transition = 'opacity 0.2s';
+      }
+    } else if (!dragNode) {
+      for (const el of nodeEls) {
+        el.g.classList.remove('hover-dim', 'hover-source', 'hover-connected');
+      }
+      for (const line of linkEls) line.style.opacity = '';
+    }
+
     if (hovered) {
-      tip.textContent = hovered.fullTitle;
+      tip.textContent = hovered.fullTitle + (hovered.refCount > 0 ? ' (' + hovered.refCount + ' 引用)' : '');
       tip.style.display = 'block';
       tip.style.left = (e.clientX + 14) + 'px';
       tip.style.top = (e.clientY - 32) + 'px';
@@ -1936,19 +2079,112 @@ function drawGraph() {
   });
 
   svg.addEventListener('mouseup', () => { dragNode = null; dragGroupOffsets = new Map(); });
-
   svg.addEventListener('mouseleave', () => {
     document.getElementById('graphTooltip').style.display = 'none';
+    for (const el of nodeEls) {
+      el.g.classList.remove('hover-dim', 'hover-source', 'hover-connected');
+    }
+    for (const line of linkEls) line.style.opacity = '';
   });
 
+  // --- Scroll zoom ---
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
     const zoom = e.deltaY < 0 ? 1.1 : 0.9;
     scale *= zoom;
-    scale = Math.max(0.25, Math.min(4, scale));
+    scale = Math.max(0.2, Math.min(5, scale));
     applyTransform();
   }, { passive: false });
+
+  // --- Right-click context menu ---
+  let contextMenuTarget = null;
+
+  svg.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const mx = (e.offsetX - panX) / scale;
+    const my = (e.offsetY - panY) / scale;
+    let hit = null;
+    for (const el of nodeEls) {
+      if (animateBirth && !bornIds.has(el.id)) continue;
+      const dx = mx - el.pos.x, dy = my - el.pos.y;
+      if (Math.sqrt(dx * dx + dy * dy) < el.r + 12) {
+        hit = el;
+        break;
+      }
+    }
+    if (!hit) { hideCtxMenu(); return; }
+
+    contextMenuTarget = hit;
+    const menu = document.getElementById('graphCtxMenu');
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    document.getElementById('ctx-open-doc').style.display = hit.isFolder ? 'none' : '';
+    document.getElementById('ctx-open-doc').onclick = () => {
+      if (!hit.isFolder) openDoc(hit.id);
+      hideCtxMenu();
+    };
+    document.getElementById('ctx-show-graph').onclick = () => {
+      showGraphForDoc(hit.id);
+      hideCtxMenu();
+    };
+    document.getElementById('ctx-reset-view').onclick = () => {
+      scale = 1; panX = 0; panY = 0;
+      applyTransform();
+      hideCtxMenu();
+    };
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#graphCtxMenu')) hideCtxMenu();
+  });
+
+  // --- Keyboard controls ---
+  svg.addEventListener('keydown', (e) => {
+    const step = 30;
+    switch (e.key) {
+      case '+': case '=':
+        e.preventDefault();
+        scale = Math.min(5, scale * 1.15);
+        applyTransform();
+        break;
+      case '-': case '_':
+        e.preventDefault();
+        scale = Math.max(0.2, scale / 1.15);
+        applyTransform();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        panY += step;
+        applyTransform();
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        panY -= step;
+        applyTransform();
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        panX += step;
+        applyTransform();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        panX -= step;
+        applyTransform();
+        break;
+      case '0':
+        e.preventDefault();
+        scale = 1; panX = 0; panY = 0;
+        applyTransform();
+        break;
+    }
+  });
+
+  svg.addEventListener('click', () => svg.focus());
 }
+
 
 // ============================================================
 // GROWTH ANIMATION
@@ -2049,7 +2285,7 @@ function redrawGraphForGrowth() {
   const resetBtn = container.querySelector('.graph-reset-btn');
   // Redraw
   const graphHint = document.querySelector('.graph-hint');
-  drawGraph();
+  drawGraph(true); // skipLayout — keep positions stable during growth animation
   // Re-append reset button
   const newContainer = document.getElementById('graphContainer');
   if (newContainer && resetBtn && !newContainer.querySelector('.graph-reset-btn')) {
@@ -2609,6 +2845,11 @@ function esc(str) {
 
 function escRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hideCtxMenu() {
+  const menu = document.getElementById('graphCtxMenu');
+  if (menu) menu.style.display = 'none';
 }
 
 // ============================================================

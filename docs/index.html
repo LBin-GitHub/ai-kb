@@ -364,7 +364,6 @@
       flex-shrink: 0;
     }
     .growth-btn:hover { background: var(--accent); color: #fff; }
-    .growth-btn.playing { background: var(--accent); color: #fff; }
     .growth-speed {
       padding: 4px 8px;
       border: 1px solid #d0d0d0;
@@ -1477,9 +1476,6 @@ function renderHomepage() {
   area.innerHTML = `
     <div class="homepage">
       <div class="growth-toolbar" id="growthToolbar">
-        <button class="growth-btn${growthAnimating ? ' playing' : ''}" id="growthPlayBtn" onclick="toggleGrowthAnimation()" title="${growthAnimating ? '暂停' : '播放'}生长动画">
-          ${growthAnimating ? '⏸' : '▶'}
-        </button>
         <span class="growth-label">速度</span>
         <select class="growth-speed" id="growthSpeed" onchange="setGrowthSpeed(this.value)">
           <option value="0.5"${growthSpeed === 0.5 ? ' selected' : ''}>0.5x</option>
@@ -1979,24 +1975,6 @@ function formatGrowthDate(msOrDate) {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function toggleGrowthAnimation() {
-  if (growthAnimating) {
-    growthAnimating = false;
-    if (growthTimer) { clearTimeout(growthTimer); growthTimer = null; }
-  } else {
-    if (growthProgress >= 1) growthProgress = 0;
-    growthAnimating = true;
-    startGrowthAnimation();
-  }
-  // Update button states
-  const btn = document.getElementById('growthPlayBtn');
-  if (btn) {
-    btn.classList.toggle('playing', growthAnimating);
-    btn.textContent = growthAnimating ? '⏸' : '▶';
-    btn.title = growthAnimating ? '暂停' : '播放';
-  }
-}
-
 function startGrowthAnimation() {
   if (!growthAnimating) return;
   const range = getGrowthTimeRange();
@@ -2010,8 +1988,6 @@ function startGrowthAnimation() {
   if (growthProgress >= 1) {
     growthProgress = 1;
     growthAnimating = false;
-    const btn = document.getElementById('growthPlayBtn');
-    if (btn) { btn.classList.remove('playing'); btn.textContent = '▶'; btn.title = '播放'; }
   }
 
   redrawGraphForGrowth();
@@ -2027,8 +2003,6 @@ function setGrowthProgress(val) {
   if (growthProgress >= 1) {
     growthAnimating = false;
     if (growthTimer) { clearTimeout(growthTimer); growthTimer = null; }
-    const btn = document.getElementById('growthPlayBtn');
-    if (btn) { btn.classList.remove('playing'); btn.textContent = '▶'; btn.title = '播放'; }
   }
   redrawGraphForGrowth();
   updateGrowthUI();
@@ -2044,8 +2018,6 @@ function resetGrowthAnimation() {
   growthProgress = 0;
   redrawGraphForGrowth();
   updateGrowthUI();
-  const btn = document.getElementById('growthPlayBtn');
-  if (btn) { btn.classList.remove('playing'); btn.textContent = '▶'; btn.title = '播放'; }
 }
 
 function updateGrowthUI() {

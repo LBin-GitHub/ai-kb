@@ -101,6 +101,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      flex: 1 1 auto;
+      min-width: 0;
     }
     .tree-item:hover {
       background: var(--accent-light);
@@ -1253,7 +1255,7 @@ let growthAnimating = false; // growth animation playing
 let growthProgress = 1; // 0-1, default=1 (fully grown)
 let growthSpeed = 1; // speed multiplier
 let growthTimer = null; // animation timer
-let forceLayout = null; // { positions, refCounts } — computed once, reused for growth animation
+let growthDocOrder = null; // cached sorted doc IDs for stable growth rhythm
 let forceLayoutVersion = 0; // increment to force recompute
 const HIDDEN_DOC_IDS = new Set(['M2a6d47IcocGT5x5GyEc1EA3nzc']); // Add doc IDs to hide from sidebar/search/graph
 const DEEPSEEK_API_KEY = 'sk-09caa3f74c0d40' + '89977853b1a9165814';
@@ -1293,6 +1295,8 @@ async function loadData() {
     for (const doc of data.documents) {
       doc.isFolder = isFolderDoc(doc);
     }
+    growthDocOrder = null; // clear cached growth order
+    forceLayout = null; // clear cached layout
     initUI();
   } catch (e) {
     document.getElementById('contentArea').innerHTML =
@@ -1347,6 +1351,28 @@ function buildDocTree() {
   const realDocCount = data.documents.filter(d => d.content && !d.isFolder && !HIDDEN_DOC_IDS.has(d.id)).length;
   const expandAll = realDocCount < 15;
   data.tree.forEach(root => renderTreeNode(root, container, 0, expandAll));
+
+  // Sidebar tooltip for tree items
+  const tip = document.getElementById('tocTooltip');
+  if (tip && container) {
+    container.addEventListener('mouseover', (e) => {
+      const item = e.target.closest('.tree-item');
+      if (!item) { tip.style.display = 'none'; return; }
+      const span = item.querySelector('span[data-fulltitle]');
+      if (!span) { tip.style.display = 'none'; return; }
+      const title = span.getAttribute('data-fulltitle');
+      if (!title) { tip.style.display = 'none'; return; }
+      tip.textContent = title;
+      tip.style.display = 'block';
+    });
+    container.addEventListener('mousemove', (e) => {
+      const item = e.target.closest('.tree-item');
+      if (!item) { tip.style.display = 'none'; return; }
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY - 10) + 'px';
+    });
+    container.addEventListener('mouseout', () => { tip.style.display = 'none'; });
+  }
 }
 
 function renderTreeNode(node, parent, depth, expandAll) {
@@ -1385,11 +1411,11 @@ function renderTreeNode(node, parent, depth, expandAll) {
   };
 
   if (isFolder) {
-    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span><span>📁 ${esc(node.title)}</span>`;
+    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span><span data-fulltitle="${esc(node.title)}">📁 ${esc(node.title)}</span>`;
   } else if (node.children && node.children.length > 0) {
-    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span><span>${esc(node.title)}</span>`;
+    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span><span data-fulltitle="${esc(node.title)}">${esc(node.title)}</span>`;
   } else {
-    div.innerHTML = `<span class="dot"></span><span>${esc(node.title)}</span>`;
+    div.innerHTML = `<span class="dot"></span><span data-fulltitle="${esc(node.title)}">${esc(node.title)}</span>`;
   }
 
   parent.appendChild(div);
@@ -2228,12 +2254,22 @@ function getGrowthTimeRange() {
 }
 
 function getNodeBornProgress(docId) {
-  const range = getGrowthTimeRange();
-  if (!range || range.end === range.start) return 0;
-  const doc = data.documents.find(d => d.id === docId);
-  if (!doc || !doc.createdAt) return 0;
-  const docTime = new Date(doc.createdAt).getTime();
-  return (docTime - range.start) / (range.end - range.start);
+  if (!growthDocOrder) {
+    // Build sorted order once: documents sorted by creation time
+    const docs = data.documents
+      .filter(d => !HIDDEN_DOC_IDS.has(d.id) && d.createdAt)
+      .map(d => ({ id: d.id, time: new Date(d.createdAt).getTime() }))
+      .sort((a, b) => a.time - b.time);
+    // Add docs without createdAt at the beginning
+    const noTimeDocs = data.documents
+      .filter(d => !HIDDEN_DOC_IDS.has(d.id) && !d.createdAt)
+      .map(d => d.id);
+    growthDocOrder = [...noTimeDocs, ...docs.map(d => d.id)];
+  }
+  const idx = growthDocOrder.indexOf(docId);
+  if (idx === -1) return 1; // Not in order (hidden or orphan), show immediately
+  if (growthDocOrder.length <= 1) return 0;
+  return idx / (growthDocOrder.length - 1);
 }
 
 function formatGrowthDate(msOrDate) {
@@ -2243,11 +2279,11 @@ function formatGrowthDate(msOrDate) {
 
 function startGrowthAnimation() {
   if (!growthAnimating) return;
-  const range = getGrowthTimeRange();
-  const totalMs = range ? (range.end - range.start) : 10000;
-  const frameMs = 50; // ~20 fps
-  const stepsPerSecond = 1000 / frameMs;
-  const stepSize = 1 / (stepsPerSecond * (totalMs / 1000) * 2); // ~2 seconds total at 1x to grow
+  const frameMs = 60; // ~16.7 fps, stable rhythm
+  // Uniform rhythm: each node appears at roughly equal intervals
+  // At 1x speed, each node appears every ~3 frames (~180ms)
+  const totalDocs = data.documents.filter(d => !HIDDEN_DOC_IDS.has(d.id) && !d.isFolder).length;
+  const stepSize = totalDocs > 1 ? (1 / ((totalDocs - 1) * 3)) : 0.02;
 
   growthProgress = Math.min(1, growthProgress + stepSize * growthSpeed);
 

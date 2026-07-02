@@ -1417,36 +1417,66 @@ function drawGraph() {
   for (const n of data.graph.nodes) allIds.add(n.id);
   for (const id of Object.keys(depthMap)) allIds.add(id);
 
-  // Compute max depth and width per level
-  const levels = {};
-  let maxDepth = 0;
-  for (const id of allIds) {
-    const d = depthMap[id] || { depth: 0, color: '#999' };
-    if (!levels[d.depth]) levels[d.depth] = [];
-    levels[d.depth].push(id);
-    maxDepth = Math.max(maxDepth, d.depth);
+  // ============================================
+  // NEW LAYOUT: Parent-centered tree spreading
+  // ============================================
+  const positions = {};
+  const subtreeSize = {};
+
+  function getSubtreeSize(id) {
+    if (subtreeSize[id] !== undefined) return subtreeSize[id];
+    const kids = childrenMap[id] || [];
+    if (kids.length === 0) return subtreeSize[id] = 1;
+    return subtreeSize[id] = 1 + kids.reduce((sum, c) => sum + getSubtreeSize(c), 0);
   }
 
-  const nLevels = Object.keys(levels).length || 1;
-  const layerH = (H - pad * 2) / Math.max(nLevels, 1);
+  // Place roots with spacing proportional to subtree size
+  const rootIds = data.tree.map(n => n.id);
+  const totalSubtreeSize = rootIds.reduce((sum, id) => sum + getSubtreeSize(id), 0);
+  const usableWidth = Math.max(W - pad * 2, 200);
+  let xCursor = pad + 20;
 
-  // Position nodes in layers
-  const positions = {};
-  for (const [depth, ids] of Object.entries(levels)) {
-    const d = parseInt(depth);
-    const y = pad + (d / Math.max(maxDepth, 1)) * (H - pad * 2);
-    const count = ids.length;
-    const layerW = (W - pad * 2);
-    const spacing = layerW / Math.max(count + 1, 1);
+  for (let i = 0; i < rootIds.length; i++) {
+    const id = rootIds[i];
+    const size = getSubtreeSize(id);
+    const branchWidth = (size / totalSubtreeSize) * usableWidth;
+    const x = xCursor + branchWidth / 2;
+    const jitterY = (Math.random() - 0.5) * 20;
+    positions[id] = { x: x, y: pad + 30 + jitterY, depth: 0 };
+    placeChildren(id, x, branchWidth, positions[id].y, 1);
+    xCursor += branchWidth;
+  }
 
-    for (let i = 0; i < ids.length; i++) {
-      // Add some horizontal jitter for natural look
-      const jitterX = (Math.random() - 0.5) * 30;
-      const jitterY = (Math.random() - 0.5) * 20;
-      positions[ids[i]] = {
-        x: pad + spacing * (i + 1) + jitterX,
-        y: Math.max(pad, Math.min(H - pad, y + jitterY)),
-        depth: d,
+  // Recursive child placement: children spread in a fan below their parent
+  function placeChildren(parentId, parentX, parentWidth, parentY, depth) {
+    const children = childrenMap[parentId] || [];
+    if (children.length === 0) return;
+    const childY = parentY + 130;
+    const minSpacing = 90;
+    const spacing = Math.max(minSpacing, parentWidth / (children.length + 1));
+    const totalWidth = spacing * (children.length - 1);
+    let startX = parentX - totalWidth / 2;
+    for (let i = 0; i < children.length; i++) {
+      const childId = children[i];
+      const jitterX = (Math.random() - 0.5) * 15;
+      const jitterY = (Math.random() - 0.5) * 10;
+      positions[childId] = {
+        x: startX + spacing * i + jitterX,
+        y: Math.max(pad + 50, Math.min(H - pad - 50, childY + jitterY)),
+        depth: depth,
+      };
+      const childWidth = parentWidth / children.length;
+      placeChildren(childId, positions[childId].x, childWidth, positions[childId].y, depth + 1);
+    }
+  }
+
+  // Orphan nodes (in graph but not in tree)
+  for (const id of allIds) {
+    if (!positions[id]) {
+      positions[id] = {
+        x: W / 2 + (Math.random() - 0.5) * 150,
+        y: H / 2 + (Math.random() - 0.5) * 150,
+        depth: 0,
       };
     }
   }
@@ -1640,13 +1670,14 @@ function drawGraph() {
     // Label
     const label = document.createElementNS(svgNS, 'text');
     label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('dy', r + 15);
-    label.setAttribute('font-size', pos.depth === 0 ? '13' : '11');
+    label.setAttribute('dy', r + (pos.depth === 0 ? 16 : 13));
+    label.setAttribute('font-size', pos.depth === 0 ? '12' : '10');
     label.setAttribute('fill', pos.depth === 0 ? '#1a1a1a' : '#4a4a4a');
-    label.setAttribute('font-weight', pos.depth === 0 ? '600' : '400');
+    label.setAttribute('font-weight', pos.depth === 0 ? '700' : '400');
     label.setAttribute('font-family', '-apple-system, sans-serif');
     const docTitle = doc ? doc.title : id;
-    const truncated = docTitle.length > 14 ? docTitle.substring(0, 13) + '…' : docTitle;
+    const maxLen = pos.depth === 0 ? 12 : 10;
+    const truncated = docTitle.length > maxLen ? docTitle.substring(0, maxLen - 1) + '…' : docTitle;
     label.textContent = truncated;
     g.appendChild(label);
 
@@ -1657,6 +1688,7 @@ function drawGraph() {
   // Drag + zoom
   let dragNode = null, dragOffX = 0, dragOffY = 0;
   let scale = 1, panX = 0, panY = 0;
+  let dragGroupOffsets = new Map(); // descendantId -> {ox, oy}
 
   function applyTransform() {
     nodeGroup.setAttribute('transform', `translate(${panX},${panY}) scale(${scale})`);
@@ -1672,6 +1704,20 @@ function drawGraph() {
         dragNode = el;
         dragOffX = dx;
         dragOffY = dy;
+
+        // Build drag group: all descendants move together
+        dragGroupOffsets = new Map();
+        function collectDescendants(id) {
+          const kids = childrenMap[id] || [];
+          for (const childId of kids) {
+            dragGroupOffsets.set(childId, {
+              ox: positions[childId].x - positions[dragNode.id].x,
+              oy: positions[childId].y - positions[dragNode.id].y,
+            });
+            collectDescendants(childId);
+          }
+        }
+        collectDescendants(el.id);
         break;
       }
     }
@@ -1682,14 +1728,33 @@ function drawGraph() {
     const my = (e.offsetY - panY) / scale;
 
     if (dragNode) {
-      dragNode.pos.x = mx - dragOffX;
-      dragNode.pos.y = my - dragOffY;
-      dragNode.g.setAttribute('transform', `translate(${dragNode.pos.x},${dragNode.pos.y})`);
-      // Update lines touching this node
+      const newX = mx - dragOffX;
+      const newY = my - dragOffY;
+      const deltaX = newX - dragNode.pos.x;
+      const deltaY = newY - dragNode.pos.y;
+      dragNode.pos.x = newX;
+      dragNode.pos.y = newY;
+      dragNode.g.setAttribute('transform', `translate(${newX},${newY})`);
+
+      // Move all descendants together with the parent
+      for (const [descId, offsets] of dragGroupOffsets) {
+        const descPos = positions[descId];
+        if (descPos) {
+          descPos.x += deltaX;
+          descPos.y += deltaY;
+          const descEl = nodeEls.find(el => el.id === descId);
+          if (descEl && descEl.g) {
+            descEl.g.setAttribute('transform', `translate(${descPos.x},${descPos.y})`);
+          }
+        }
+      }
+
+      // Update all edges touching any node in the drag group
+      const groupIds = new Set([dragNode.id, ...dragGroupOffsets.keys()]);
       const lines = linkGroup.querySelectorAll('line');
       let li = 0;
       for (const edge of edgeList) {
-        if (edge.source === dragNode.id || edge.target === dragNode.id) {
+        if (groupIds.has(edge.source) || groupIds.has(edge.target)) {
           const sp = positions[edge.source];
           const tp = positions[edge.target];
           if (sp && tp && lines[li]) {
@@ -1724,7 +1789,7 @@ function drawGraph() {
     svg.style.cursor = dragNode ? 'grabbing' : (hovered && !hovered.isFolder ? 'pointer' : '');
   });
 
-  svg.addEventListener('mouseup', () => { dragNode = null; });
+  svg.addEventListener('mouseup', () => { dragNode = null; dragGroupOffsets = new Map(); });
 
   svg.addEventListener('mouseleave', () => {
     document.getElementById('graphTooltip').style.display = 'none';

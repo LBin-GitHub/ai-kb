@@ -37,6 +37,29 @@ function lark(cmd) {
   }
 }
 
+// Fetch a single node's metadata (includes create_time)
+function fetchNodeCreateTime(nodeToken) {
+  const cmd = `api GET "/open-apis/wiki/v2/spaces/${SPACE_ID}/nodes/${nodeToken}" --as user --format json`;
+  const result = lark(cmd);
+  if (result && result.ok && result.data && result.data.node) {
+    const t = result.data.node.obj_create_time;
+    if (t) {
+      // Convert Unix timestamp string to ISO date
+      const ts = parseInt(t, 10);
+      return new Date(ts * 1000).toISOString();
+    }
+  }
+  // Fallback: use node_create_time
+  if (result && result.ok && result.data && result.data.node) {
+    const t = result.data.node.node_create_time;
+    if (t) {
+      const ts = parseInt(t, 10);
+      return new Date(ts * 1000).toISOString();
+    }
+  }
+  return null;
+}
+
 // Fetch all wiki nodes recursively
 function getAllNodes(parentNodeToken = '') {
   let cmd = `wiki +node-list --space-id ${SPACE_ID} --as user --format json`;
@@ -140,6 +163,16 @@ async function main() {
   const allNodes = getAllNodes();
   console.log(`   Found ${allNodes.length} documents\n`);
 
+  // 1.5 Fetch create_time for each node
+  console.log('🕐 Fetching creation times...');
+  const nodeCreateTimeMap = {};
+  for (const node of allNodes) {
+    const ct = fetchNodeCreateTime(node.node_token);
+    nodeCreateTimeMap[node.node_token] = ct;
+    console.log(`   ${ct ? '✅' : '⚠️'}  ${node.title}: ${ct || 'N/A'}`);
+  }
+  console.log('');
+
   // 2. Build tree structure
   const rootNodes = allNodes.filter(n => !n.parent_node_token);
   
@@ -166,6 +199,7 @@ async function main() {
       links: content ? extractLinks(content) : [],
       parentToken: node.parent_node_token || null,
       hasChild: node.has_child || false,
+      createdAt: nodeCreateTimeMap[node.node_token] || null,
     });
   }
 
@@ -272,6 +306,7 @@ async function main() {
       tags: d.tags,
       parentToken: d.parentToken,
       hasChild: d.hasChild,
+      createdAt: d.createdAt,
     })),
     graph: graph,
     backlinks: buildBacklinks(documents, edges),

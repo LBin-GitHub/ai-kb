@@ -252,3 +252,9 @@
 - **11:21 处理**: 已重新发起 lark-cli auth login（scope: wiki:node:retrieve，domain: wiki），生成新 QR 码（auth-qrcode.png），等待用户扫码授权后继续执行同步与部署
 - **14:24 手动执行结果**: 按用户指令运行 sync.js（❌ 失败，0 篇文档）与 deploy.js（⚠️ 推送空数据 Commit: ccc4653，18 个文件）；已 force reset main → 7c8cf0b，恢复含 8 篇文档的有效版本；GitHub Pages 不受影响
 - **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 65 小时），需用户扫码完成 lark-cli 重新授权后恢复同步
+
+## 2026-07-02（续）
+
+- **15:30 同步结果**: ✅ 成功；19 篇文档（飞书 token 已恢复，知识库大幅更新：从 8 篇增至 19 篇）；16 边图谱；311.8 KB
+- **15:30 部署结果**: ✅ 推送成功（Commit: 9ae7feb，18 个文件；Tree: 1fcc6f0）；Pages API 重试 4 次后未确认，历史已启用，不影响访问
+- **状态**: 飞书 token 已恢复，同步正常；GitHub Pages URL: https://lbin-github.github.io/ai-kb/

@@ -335,6 +335,98 @@
       background: var(--accent);
       color: #fff;
     }
+    /* Growth animation toolbar */
+    .growth-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      background: var(--bg-card);
+      border: 1px solid #e0dbf0;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      max-width: 700px;
+      font-family: var(--font-sans);
+    }
+    .growth-btn {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--accent);
+      background: var(--bg-card);
+      color: var(--accent);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .growth-btn:hover { background: var(--accent); color: #fff; }
+    .growth-btn.playing { background: var(--accent); color: #fff; }
+    .growth-speed {
+      padding: 4px 8px;
+      border: 1px solid #d0d0d0;
+      border-radius: 6px;
+      font-size: 11px;
+      font-family: var(--font-sans);
+      background: var(--bg);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .growth-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .growth-timeline {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .growth-timeline input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--growth-pct, 0%), #e0dbf0 var(--growth-pct, 0%), #e0dbf0 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    .growth-timeline input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      cursor: pointer;
+    }
+    .growth-time-display {
+      font-size: 10px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-width: 52px;
+      text-align: center;
+    }
+    /* Node birth animation styles */
+    .graph-node.birthing circle,
+    .graph-node.birthing polygon {
+      animation: nodePop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+    @keyframes nodePop {
+      0% { opacity: 0; transform-origin: center; }
+      60% { opacity: 1; }
+      100% { opacity: 1; }
+    }
+    .graph-node.unborn { opacity: 0 !important; pointer-events: none !important; }
+    .graph-node.unborn * { opacity: 0 !important; }
     .homepage .graph-hint {
       position: absolute;
       bottom: 10px;
@@ -1099,6 +1191,10 @@ let graphFilter = null; // { visibleIds: Set, highlightedIds: Set } or null
 let localGraphMode = false; // toggle local/global graph
 let localGraphDocId = null; // focus doc for local graph
 let localGraphDepth = 2; // neighbor depth for local graph
+let growthAnimating = false; // growth animation playing
+let growthProgress = 1; // 0-1, default=1 (fully grown)
+let growthSpeed = 1; // speed multiplier
+let growthTimer = null; // animation timer
 const HIDDEN_DOC_IDS = new Set(['M2a6d47IcocGT5x5GyEc1EA3nzc']); // Add doc IDs to hide from sidebar/search/graph
 const DEEPSEEK_API_KEY = 'sk-09caa3f74c0d40' + '89977853b1a9165814';
 
@@ -1366,8 +1462,39 @@ function renderHomepage() {
     ? `<div class="graph-hint" style="color:var(--accent);font-weight:600;">🔍 筛选模式：显示 ${visibleCount} 个节点（${highlightedCount} 个匹配）</div>`
     : '<div class="graph-hint">🖱️ 拖拽节点 · 滚轮缩放 · 实线=层级关系 · 虚线=内容关联 · 点击打开文档</div>';
 
+  // Build growth time range
+  const timestamps = data.documents
+    .filter(d => !HIDDEN_DOC_IDS.has(d.id) && d.createdAt)
+    .map(d => new Date(d.createdAt).getTime());
+  const growthRange = timestamps.length > 1
+    ? { start: Math.min(...timestamps), end: Math.max(...timestamps) }
+    : null;
+  const growthPct = Math.round(growthProgress * 100);
+  const currentTimeMs = growthRange
+    ? new Date(growthRange.start + (growthRange.end - growthRange.start) * growthProgress)
+    : null;
+
   area.innerHTML = `
     <div class="homepage">
+      <div class="growth-toolbar" id="growthToolbar">
+        <button class="growth-btn${growthAnimating ? ' playing' : ''}" id="growthPlayBtn" onclick="toggleGrowthAnimation()" title="${growthAnimating ? '暂停' : '播放'}生长动画">
+          ${growthAnimating ? '⏸' : '▶'}
+        </button>
+        <span class="growth-label">速度</span>
+        <select class="growth-speed" id="growthSpeed" onchange="setGrowthSpeed(this.value)">
+          <option value="0.5"${growthSpeed === 0.5 ? ' selected' : ''}>0.5x</option>
+          <option value="1"${growthSpeed === 1 ? ' selected' : ''}>1x</option>
+          <option value="2"${growthSpeed === 2 ? ' selected' : ''}>2x</option>
+          <option value="4"${growthSpeed === 4 ? ' selected' : ''}>4x</option>
+        </select>
+        <div class="growth-timeline">
+          <span class="growth-time-display">${growthRange ? formatGrowthDate(new Date(growthRange.start)) : '—'}</span>
+          <input type="range" id="growthSlider" min="0" max="100" value="${Math.round(growthProgress * 100)}"
+            oninput="setGrowthProgress(this.value / 100)" style="--growth-pct: ${growthPct}%">
+          <span class="growth-time-display">${currentTimeMs ? formatGrowthDate(currentTimeMs) : '—'}</span>
+        </div>
+        <button class="growth-btn" onclick="resetGrowthAnimation()" title="重置">↺</button>
+      </div>
       <div class="graph-container" id="graphContainer">
         <button class="graph-reset-btn${graphFilter ? ' visible' : ''}" onclick="resetSearch()">↺ 重置</button>
       </div>
@@ -1503,6 +1630,17 @@ function drawGraph() {
   const visibleIds = graphFilter ? graphFilter.visibleIds : null;
   const highlightedIds = graphFilter ? graphFilter.highlightedIds : null;
 
+  // Growth animation: determine which nodes are "born" at current progress
+  const bornIds = new Set();
+  if (growthProgress < 1) {
+    for (const id of allIds) {
+      if (HIDDEN_DOC_IDS.has(id)) continue;
+      const bp = getNodeBornProgress(id);
+      if (bp <= growthProgress) bornIds.add(id);
+    }
+  }
+  const animateBirth = growthProgress < 1; // false when animation complete (show all)
+
   // Node visuals
   const nodeSize = (depth) => 28 - depth * 5;
 
@@ -1532,15 +1670,18 @@ function drawGraph() {
     line.setAttribute('y2', tp.y);
 
     const linkVisible = !visibleIds || (visibleIds.has(edge.source) && visibleIds.has(edge.target));
+    // Growth animation: hide edges where either endpoint is unborn
+    const edgeBorn = !animateBirth || (bornIds.has(edge.source) && bornIds.has(edge.target));
+    const edgeOpacity = linkVisible && edgeBorn ? (edge.type === 'tree' ? '0.55' : '0.35') : '0';
 
     if (edge.type === 'tree') {
       line.setAttribute('stroke', '#8884d8');
-      line.setAttribute('stroke-width', linkVisible ? '2.5' : '0.5');
-      line.setAttribute('stroke-opacity', linkVisible ? '0.55' : '0.06');
+      line.setAttribute('stroke-width', (linkVisible && edgeBorn) ? '2.5' : '0');
+      line.setAttribute('stroke-opacity', edgeOpacity);
     } else {
       line.setAttribute('stroke', '#f59e0b');
-      line.setAttribute('stroke-width', linkVisible ? '1.5' : '0.5');
-      line.setAttribute('stroke-opacity', linkVisible ? '0.35' : '0.06');
+      line.setAttribute('stroke-width', (linkVisible && edgeBorn) ? '1.5' : '0');
+      line.setAttribute('stroke-opacity', edgeOpacity);
       line.setAttribute('stroke-dasharray', '6 4');
     }
     linkGroup.appendChild(line);
@@ -1559,6 +1700,7 @@ function drawGraph() {
     let cls = 'graph-node';
     if (!isVisible) cls += ' hidden';
     if (isHighlighted) cls += ' highlighted';
+    if (animateBirth && !bornIds.has(id)) cls += ' unborn';
     g.className.baseVal = cls;
 
     const doc = data.documents.find(d => d.id === id);
@@ -1570,7 +1712,8 @@ function drawGraph() {
 
     const r = isFolder ? 18 - pos.depth * 3 : nodeSize(pos.depth);
 
-    if (!isFolder && isVisible) {
+    const nodeClickable = !isFolder && isVisible && (!animateBirth || bornIds.has(id));
+    if (nodeClickable) {
       g.setAttribute('cursor', 'pointer');
       g.onclick = () => openDoc(id);
     } else {
@@ -1703,6 +1846,8 @@ function drawGraph() {
     const my = (e.offsetY - panY) / scale;
     for (const el of nodeEls) {
       const dx = mx - el.pos.x, dy = my - el.pos.y;
+      // Skip unborn nodes (during growth animation)
+      if (animateBirth && !bornIds.has(el.id)) continue;
       if (Math.sqrt(dx * dx + dy * dy) < el.r + 10) {
         dragNode = el;
         dragOffX = dx;
@@ -1773,6 +1918,8 @@ function drawGraph() {
     const tip = document.getElementById('graphTooltip');
     let hovered = null;
     for (const el of nodeEls) {
+      // Skip unborn nodes during growth animation
+      if (animateBirth && !bornIds.has(el.id)) continue;
       const dx = mx - el.pos.x, dy = my - el.pos.y;
       const hitR = el.r + 24; // generous hit area covers both icon and text
       if (Math.sqrt(dx * dx + dy * dy) < hitR) {
@@ -1805,6 +1952,137 @@ function drawGraph() {
     scale = Math.max(0.25, Math.min(4, scale));
     applyTransform();
   }, { passive: false });
+}
+
+// ============================================================
+// GROWTH ANIMATION
+// ============================================================
+
+function getGrowthTimeRange() {
+  const docs = data.documents.filter(d => !HIDDEN_DOC_IDS.has(d.id) && d.createdAt);
+  if (docs.length < 2) return null;
+  const times = docs.map(d => new Date(d.createdAt).getTime());
+  return { start: Math.min(...times), end: Math.max(...times) };
+}
+
+function getNodeBornProgress(docId) {
+  const range = getGrowthTimeRange();
+  if (!range || range.end === range.start) return 0;
+  const doc = data.documents.find(d => d.id === docId);
+  if (!doc || !doc.createdAt) return 0;
+  const docTime = new Date(doc.createdAt).getTime();
+  return (docTime - range.start) / (range.end - range.start);
+}
+
+function formatGrowthDate(msOrDate) {
+  const d = msOrDate instanceof Date ? msOrDate : new Date(msOrDate);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function toggleGrowthAnimation() {
+  if (growthAnimating) {
+    growthAnimating = false;
+    if (growthTimer) { clearTimeout(growthTimer); growthTimer = null; }
+  } else {
+    if (growthProgress >= 1) growthProgress = 0;
+    growthAnimating = true;
+    startGrowthAnimation();
+  }
+  // Update button states
+  const btn = document.getElementById('growthPlayBtn');
+  if (btn) {
+    btn.classList.toggle('playing', growthAnimating);
+    btn.textContent = growthAnimating ? '⏸' : '▶';
+    btn.title = growthAnimating ? '暂停' : '播放';
+  }
+}
+
+function startGrowthAnimation() {
+  if (!growthAnimating) return;
+  const range = getGrowthTimeRange();
+  const totalMs = range ? (range.end - range.start) : 10000;
+  const frameMs = 50; // ~20 fps
+  const stepsPerSecond = 1000 / frameMs;
+  const stepSize = 1 / (stepsPerSecond * (totalMs / 1000) * 2); // ~2 seconds total at 1x to grow
+
+  growthProgress = Math.min(1, growthProgress + stepSize * growthSpeed);
+
+  if (growthProgress >= 1) {
+    growthProgress = 1;
+    growthAnimating = false;
+    const btn = document.getElementById('growthPlayBtn');
+    if (btn) { btn.classList.remove('playing'); btn.textContent = '▶'; btn.title = '播放'; }
+  }
+
+  redrawGraphForGrowth();
+  updateGrowthUI();
+
+  if (growthAnimating) {
+    growthTimer = setTimeout(startGrowthAnimation, frameMs);
+  }
+}
+
+function setGrowthProgress(val) {
+  growthProgress = Math.max(0, Math.min(1, val));
+  if (growthProgress >= 1) {
+    growthAnimating = false;
+    if (growthTimer) { clearTimeout(growthTimer); growthTimer = null; }
+    const btn = document.getElementById('growthPlayBtn');
+    if (btn) { btn.classList.remove('playing'); btn.textContent = '▶'; btn.title = '播放'; }
+  }
+  redrawGraphForGrowth();
+  updateGrowthUI();
+}
+
+function setGrowthSpeed(val) {
+  growthSpeed = parseFloat(val);
+}
+
+function resetGrowthAnimation() {
+  growthAnimating = false;
+  if (growthTimer) { clearTimeout(growthTimer); growthTimer = null; }
+  growthProgress = 0;
+  redrawGraphForGrowth();
+  updateGrowthUI();
+  const btn = document.getElementById('growthPlayBtn');
+  if (btn) { btn.classList.remove('playing'); btn.textContent = '▶'; btn.title = '播放'; }
+}
+
+function updateGrowthUI() {
+  const slider = document.getElementById('growthSlider');
+  const speed = document.getElementById('growthSpeed');
+  if (slider) {
+    const pct = Math.round(growthProgress * 100);
+    slider.value = pct;
+    slider.style.setProperty('--growth-pct', pct + '%');
+  }
+  if (speed) speed.value = growthSpeed;
+
+  const range = getGrowthTimeRange();
+  const displays = document.querySelectorAll('.growth-time-display');
+  if (displays.length >= 2 && range) {
+    displays[0].textContent = formatGrowthDate(new Date(range.start));
+    const currentMs = range.start + (range.end - range.start) * growthProgress;
+    displays[1].textContent = formatGrowthDate(new Date(currentMs));
+  }
+}
+
+function redrawGraphForGrowth() {
+  // Redraw only the graph — keeps the toolbar state
+  const container = document.getElementById('graphContainer');
+  if (!container) return;
+  // Remove old SVG
+  const oldSvg = container.querySelector('svg');
+  if (oldSvg) oldSvg.remove();
+  const resetBtn = container.querySelector('.graph-reset-btn');
+  // Redraw
+  const graphHint = document.querySelector('.graph-hint');
+  drawGraph();
+  // Re-append reset button
+  const newContainer = document.getElementById('graphContainer');
+  if (newContainer && resetBtn && !newContainer.querySelector('.graph-reset-btn')) {
+    newContainer.appendChild(resetBtn);
+  }
 }
 
 // ============================================================

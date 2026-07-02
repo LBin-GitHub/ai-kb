@@ -90,6 +90,17 @@
       gap: 6px;
       border-left: 2px solid transparent;
       user-select: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tree-item > span {
+      flex-shrink: 0;
+    }
+    .tree-item > span:not(.arrow):not(.dot) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .tree-item:hover {
       background: var(--accent-light);
@@ -1151,7 +1162,7 @@
 
 <!-- ===== SIDEBAR ===== -->
 <aside class="sidebar">
-  <div class="sidebar-header">
+  <div class="sidebar-header" onclick="showHome()" style="cursor:pointer;" title="回到首页">
     <h1><span class="icon">🧠</span> AI 知识库</h1>
     <div class="subtitle">coding.Abin.ai</div>
   </div>
@@ -1302,12 +1313,23 @@ function isFolderDoc(doc) {
 function initUI() {
   buildDocTree();
   buildRagIndex();
-  showHome();
   updateStats();
   document.getElementById('lastSync').textContent =
     '已同步 ' + new Date(data.generated).toLocaleString('zh-CN');
   document.getElementById('docCount').textContent = data.documents.length + ' 篇';
   document.getElementById('syncStatus').textContent = '已同步';
+
+  // Check URL hash for direct doc link
+  const hash = window.location.hash;
+  if (hash.startsWith('#doc=')) {
+    const docId = hash.substring(5);
+    const doc = data.documents.find(d => d.id === docId && !d.isFolder);
+    if (doc) {
+      openDoc(docId);
+      return;
+    }
+  }
+  showHome();
 }
 
 function updateStats() {
@@ -1363,11 +1385,11 @@ function renderTreeNode(node, parent, depth, expandAll) {
   };
 
   if (isFolder) {
-    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span> 📁 ${esc(node.title)}`;
+    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span><span>📁 ${esc(node.title)}</span>`;
   } else if (node.children && node.children.length > 0) {
-    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span> ${esc(node.title)}`;
+    div.innerHTML = `<span class="arrow${expanded ? ' expanded' : ''}">▶</span><span>${esc(node.title)}</span>`;
   } else {
-    div.innerHTML = `<span class="dot"></span> ${esc(node.title)}`;
+    div.innerHTML = `<span class="dot"></span><span>${esc(node.title)}</span>`;
   }
 
   parent.appendChild(div);
@@ -1401,6 +1423,9 @@ function showHome() {
   document.getElementById('searchModeDoc').classList.remove('active');
   searchMode = 'graph';
   document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+  if (window.location.hash) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
 
   if (!data || data.graph.nodes.length === 0) {
     document.getElementById('contentArea').innerHTML =
@@ -1448,6 +1473,7 @@ function openDoc(docId) {
   document.getElementById('searchModeDoc').classList.add('active');
   searchMode = 'doc';
   currentDocId = docId;
+  window.location.hash = 'doc=' + docId;
   renderDocPage(docId);
 }
 
@@ -1511,36 +1537,8 @@ function renderHomepage() {
     ? `<div class="graph-hint" style="color:var(--accent);font-weight:600;">🔍 筛选模式：显示 ${visibleCount} 个节点（${highlightedCount} 个匹配）</div>`
     : '<div class="graph-hint">🖱 拖拽节点 · 滚轮缩放 · 悬停高亮关联 · 右键菜单 · +/- 缩放 · 方向键平移 · 0 键重置</div>';
 
-  // Build growth time range
-  const timestamps = data.documents
-    .filter(d => !HIDDEN_DOC_IDS.has(d.id) && d.createdAt)
-    .map(d => new Date(d.createdAt).getTime());
-  const growthRange = timestamps.length > 1
-    ? { start: Math.min(...timestamps), end: Math.max(...timestamps) }
-    : null;
-  const growthPct = Math.round(growthProgress * 100);
-  const currentTimeMs = growthRange
-    ? new Date(growthRange.start + (growthRange.end - growthRange.start) * growthProgress)
-    : null;
-
   area.innerHTML = `
     <div class="homepage">
-      <div class="growth-toolbar" id="growthToolbar">
-        <span class="growth-label">速度</span>
-        <select class="growth-speed" id="growthSpeed" onchange="setGrowthSpeed(this.value)">
-          <option value="0.5"${growthSpeed === 0.5 ? ' selected' : ''}>0.5x</option>
-          <option value="1"${growthSpeed === 1 ? ' selected' : ''}>1x</option>
-          <option value="2"${growthSpeed === 2 ? ' selected' : ''}>2x</option>
-          <option value="4"${growthSpeed === 4 ? ' selected' : ''}>4x</option>
-        </select>
-        <div class="growth-timeline">
-          <span class="growth-time-display">${growthRange ? formatGrowthDate(new Date(growthRange.start)) : '—'}</span>
-          <input type="range" id="growthSlider" min="0" max="100" value="${Math.round(growthProgress * 100)}"
-            oninput="setGrowthProgress(this.value / 100)" style="--growth-pct: ${growthPct}%">
-          <span class="growth-time-display">${currentTimeMs ? formatGrowthDate(currentTimeMs) : '—'}</span>
-        </div>
-        <button class="growth-btn" onclick="resetGrowthAnimation()" title="重置">↺</button>
-      </div>
       <div class="graph-container" id="graphContainer">
         <button class="graph-reset-btn${graphFilter ? ' visible' : ''}" onclick="resetSearch()">↺ 重置</button>
       </div>
@@ -1553,8 +1551,15 @@ function renderHomepage() {
     </div>
   `;
 
-  // Wait for DOM
-  setTimeout(() => drawGraph(), 50);
+  // Wait for DOM then draw graph and auto-play growth animation
+  setTimeout(() => {
+    drawGraph();
+    // Auto-start growth animation from 0
+    growthProgress = 0;
+    growthAnimating = true;
+    growthSpeed = 1;
+    startGrowthAnimation();
+  }, 50);
 }
 
 // ============================================================
@@ -1615,9 +1620,9 @@ function runForceSimulation(nodeIds, edgeList, refCounts, W, H) {
   const dt = 1;
   const damping = 0.82;
   const centerStrength = 0.008;
-  const repelStrength = 800;
+  const repelStrength = 1500;
   const linkStrength = 0.004;
-  const idealLinkLen = 100;
+  const idealLinkLen = 130;
   const maxVel = 8;
   const maxIterations = 200;
   const earlyStopThreshold = 0.08;
@@ -1946,6 +1951,17 @@ function drawGraph(skipLayout) {
     nodeEls.push({ g, id, pos, r, fullTitle, isFolder, isVisible, refCount: rc });
   }
 
+  // Reorder nodes: birthing nodes (lower z), then by refCount asc (smaller below larger)
+  nodeEls.sort((a, b) => {
+    const aIsBirthing = animateBirth && !bornIds.has(a.id);
+    const bIsBirthing = animateBirth && !bornIds.has(b.id);
+    if (aIsBirthing !== bIsBirthing) return aIsBirthing ? -1 : 1;
+    return a.refCount - b.refCount;
+  });
+  for (const el of nodeEls) {
+    nodeGroup.appendChild(el.g);
+  }
+
   // ============================================================
   // INTERACTIONS
   // ============================================================
@@ -2087,12 +2103,18 @@ function drawGraph(skipLayout) {
     for (const line of linkEls) line.style.opacity = '';
   });
 
-  // --- Scroll zoom ---
+  // --- Scroll zoom (centered on mouse) ---
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
+    const oldScale = scale;
     const zoom = e.deltaY < 0 ? 1.1 : 0.9;
     scale *= zoom;
     scale = Math.max(0.2, Math.min(5, scale));
+    // Adjust pan to keep mouse position stable
+    const mx = e.offsetX;
+    const my = e.offsetY;
+    panX = mx - (mx - panX) * scale / oldScale;
+    panY = my - (my - panY) * scale / oldScale;
     applyTransform();
   }, { passive: false });
 
@@ -2140,19 +2162,27 @@ function drawGraph(skipLayout) {
     if (!e.target.closest('#graphCtxMenu')) hideCtxMenu();
   });
 
-  // --- Keyboard controls ---
+  // --- Keyboard controls (zoom centered on view center) ---
   svg.addEventListener('keydown', (e) => {
     const step = 30;
     switch (e.key) {
       case '+': case '=':
         e.preventDefault();
-        scale = Math.min(5, scale * 1.15);
-        applyTransform();
+        { const oldScale = scale;
+          scale = Math.min(5, scale * 1.15);
+          const cx = W / 2, cy = H / 2;
+          panX = cx - (cx - panX) * scale / oldScale;
+          panY = cy - (cy - panY) * scale / oldScale;
+          applyTransform(); }
         break;
       case '-': case '_':
         e.preventDefault();
-        scale = Math.max(0.2, scale / 1.15);
-        applyTransform();
+        { const oldScale = scale;
+          scale = Math.max(0.2, scale / 1.15);
+          const cx = W / 2, cy = H / 2;
+          panX = cx - (cx - panX) * scale / oldScale;
+          panY = cy - (cy - panY) * scale / oldScale;
+          applyTransform(); }
         break;
       case 'ArrowUp':
         e.preventDefault();

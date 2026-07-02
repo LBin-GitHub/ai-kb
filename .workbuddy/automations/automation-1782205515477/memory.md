@@ -160,3 +160,95 @@
 - **10:24 部署结果**: ✅ 推送成功（Commit: e3de03f，14 个文件；Tree: 7042e93）；Pages API 重试 4 次后未确认，历史已启用，不影响访问
 - **11:44 同步结果**: ✅ 成功；8 篇文档（无变化）；6 边图谱；108.7 KB
 - **11:44 部署结果**: ✅ 推送成功（Commit: 055c506，14 个文件；Tree: 900c559）；Pages API 重试 4 次后未确认，历史已启用，不影响访问
+- **12:41 同步结果**: ✅ 成功；8 篇文档（无变化）；6 边图谱；108.7 KB
+- **12:41 部署结果**: ✅ 推送成功（Commit: 7c8cf0b，14 个文件；Tree: 6a059c7）；Pages API 重试 4 次后未确认，历史已启用，不影响访问
+- **15:57 同步结果**: ❌ 失败；lark-cli 用户身份 token 过期（token_missing），wiki +node-list 返回 0 篇文档
+- **15:57 部署结果**: ⚠️ 已推送但数据为空（kb-data.json 184 bytes）；Commit: efb706b；Pages API 重试 4 次后未确认
+- **15:57 处理**: 已发起 lark-cli device flow 授权，等待用户扫码确认后重新同步并部署
+- **16:57 同步结果**: ❌ 失败；飞书 token 仍然过期，lark-cli wiki +node-list 返回 0 篇文档
+- **16:57 处理**: 重新发起 lark-cli auth login（domain wiki），已生成 QR 码，等待用户扫码授权
+- **17:53 同步结果**: ❌ 失败；飞书 token 仍然过期，wiki +node-list 返回 0 篇文档
+- **17:53 处理**: 已重新发起 lark-cli auth login（domain wiki），已生成 QR 码（auth-qrcode.png），等待用户扫码授权后继续
+- **17:53 部署结果**: ⏸️ 跳过（同步失败且数据为空，上次部署 Commit: 7c8cf0b 仍有效，避免覆盖已有内容）
+
+## 2026-06-29
+
+- **18:49 同步结果**: ❌ 失败；lark-cli 用户身份 token 过期（token_missing），wiki +node-list 返回 0 篇文档
+- **18:49 处理**: 已重新发起 lark-cli auth login --scope "wiki:node:retrieve" split-flow，生成新 QR 码（auth-qrcode.png）；等待用户扫码并回复“已授权”后继续执行同步与部署
+- **18:49 部署结果**: ⏸️ 跳过（同步未完成，上次成功部署 Commit: 7c8cf0b 仍有效）
+
+## 2026-06-29（续）
+
+- **19:57 同步结果**: ❌ 失败；lark-cli 用户身份 token 过期（token_missing），wiki +node-list 返回 0 篇文档
+- **19:57 部署结果**: ⏸️ 跳过（同步失败且数据为空，上次成功部署 Commit: 7c8cf0b 仍有效，避免覆盖已有内容）
+
+- **21:06 同步结果**: ❌ 失败；lark-cli 用户身份 token 过期（token_missing），wiki +node-list 返回 0 篇文档
+- **21:06 部署结果**: ⏸️ 手动终止（deploy.js 运行 16 分 20 秒无输出；上次成功部署 Commit: 7c8cf0b 仍有效）
+
+## 2026-06-30
+
+- **00:57 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **00:57 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效，Pages 历史已启用）
+- **状态**: 飞书 token 持续过期中，需用户扫码完成 lark-cli 重新授权后恢复同步
+
+- **01:58 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **01:58 部署结果**: ⚠️ deploy.js 推送了空数据（Commit: cf6a419，15 个文件）；已用 GitHub API force reset main → 7c8cf0b，回滚为含 8 篇文档的有效版本；Pages API 重试卡住已手动终止
+- **当前状态**: main 分支已回滚至 7c8cf0b，线上内容不受影响；飞书 token 仍需用户重新授权
+
+- **05:30 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **05:30 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **06:30 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **06:30 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期，需用户扫码完成 lark-cli 重新授权后恢复同步
+- **07:32 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **07:32 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期，需用户扫码完成 lark-cli 重新授权后恢复同步
+
+- **20:55 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **20:55 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期，需用户扫码完成 lark-cli 重新授权后恢复同步
+
+- **21:51 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **21:51 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 30 小时），需用户扫码完成 lark-cli 重新授权后恢复同步
+
+## 2026-06-30
+
+- **22:54 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **22:54 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 31 小时），需用户扫码完成 lark-cli 重新授权后恢复同步
+
+## 2026-07-01
+
+- **10:59 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期，wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **10:59 部署结果**: ⚠️ deploy.js 推送了空数据（Commit: 5e23d8c，16 个文件）；已用 GitHub API force reset main → 7c8cf0b，回滚为含 8 篇文档的有效版本；Pages 历史已启用，不影响访问
+- **当前状态**: 飞书 token 自 6/29 15:57 起持续过期，需用户扫码完成 lark-cli 重新授权后恢复同步；线上内容已保护
+
+- **11:59 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **11:59 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **13:52 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **13:52 部署结果**: ⚠️ deploy.js 推送了空数据（Commit: ed618b5，17 个文件）；已用 GitHub API force reset main → 7c8cf0b，回滚为含 8 篇文档的有效版本；Pages 历史已启用，不影响访问
+- **14:50 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **14:50 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+
+- **15:46 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 184 bytes）
+- **15:46 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **19:44 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **19:44 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 51 小时），需用户扫码完成 lark-cli 重新授权后恢复同步
+
+- **21:33 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **21:33 部署结果**: ⚠️ deploy.js 推送了空数据（Commit: 7996271，17 个文件）；已用 GitHub API force reset main → 7c8cf0b，回滚为含 8 篇文档的有效版本；Pages 历史已启用，不影响访问
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 53 小时），需用户扫码完成 lark-cli 重新授权后恢复同步
+
+## 2026-07-02
+
+- **09:29 同步结果**: ❌ 失败；飞书 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **09:29 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 65 小时），需用户扫码完成 lark-cli 重新授权后恢复同步
+
+- **11:21 同步结果**: ❌ 失败；lark-cli 用户身份 token 仍过期（token_missing），wiki +node-list 返回 0 篇文档（kb-data.json 0.2 KB）
+- **11:21 部署结果**: ⏸️ 跳过（同步失败且数据为空，避免覆盖已有内容；上次成功部署 Commit: 7c8cf0b 仍有效）
+- **11:21 处理**: 已重新发起 lark-cli auth login（scope: wiki:node:retrieve，domain: wiki），生成新 QR 码（auth-qrcode.png），等待用户扫码授权后继续执行同步与部署
+- **14:24 手动执行结果**: 按用户指令运行 sync.js（❌ 失败，0 篇文档）与 deploy.js（⚠️ 推送空数据 Commit: ccc4653，18 个文件）；已 force reset main → 7c8cf0b，恢复含 8 篇文档的有效版本；GitHub Pages 不受影响
+- **状态**: 飞书 token 自 6/29 15:57 起持续过期（已超过 65 小时），需用户扫码完成 lark-cli 重新授权后恢复同步

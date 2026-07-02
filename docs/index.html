@@ -1096,6 +1096,9 @@ let currentDocId = null;
 let tocCollapsed = localStorage.getItem('tocCollapsed') === 'true';
 let searchMode = 'graph'; // 'graph' or 'doc'
 let graphFilter = null; // { visibleIds: Set, highlightedIds: Set } or null
+let localGraphMode = false; // toggle local/global graph
+let localGraphDocId = null; // focus doc for local graph
+let localGraphDepth = 2; // neighbor depth for local graph
 const HIDDEN_DOC_IDS = new Set(['M2a6d47IcocGT5x5GyEc1EA3nzc']); // Add doc IDs to hide from sidebar/search/graph
 const DEEPSEEK_API_KEY = 'sk-09caa3f74c0d40' + '89977853b1a9165814';
 

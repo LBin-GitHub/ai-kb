@@ -153,17 +153,19 @@ async function main() {
     const rawContent = fetchDocContent(node.obj_token);
     const content = cleanContent(rawContent, 'markdown');
     
-    if (!content || content === node.title) continue; // Skip empty docs
+    // Include folder nodes (has_child) even without content; skip empty non-folder docs
+    if (!node.has_child && (!content || content === node.title)) continue;
 
     documents.push({
       id: node.obj_token,
       nodeToken: node.node_token,
       title: node.title,
-      content: content,
-      summary: generateSummary(content),
-      tags: extractTags(content),
-      links: extractLinks(content),
+      content: content || '',
+      summary: content ? generateSummary(content) : '',
+      tags: content ? extractTags(content) : [],
+      links: content ? extractLinks(content) : [],
       parentToken: node.parent_node_token || null,
+      hasChild: node.has_child || false,
     });
   }
 
@@ -269,6 +271,7 @@ async function main() {
       content: d.content,
       tags: d.tags,
       parentToken: d.parentToken,
+      hasChild: d.hasChild,
     })),
     graph: graph,
     backlinks: buildBacklinks(documents, edges),

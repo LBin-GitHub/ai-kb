@@ -82,9 +82,9 @@
     .tree-item {
       display: flex;
       align-items: center;
-      padding: 6px 20px;
+      padding: 5px 20px;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       color: var(--text-muted);
       transition: all 0.15s;
       gap: 6px;
@@ -1096,6 +1096,7 @@ let currentDocId = null;
 let tocCollapsed = localStorage.getItem('tocCollapsed') === 'true';
 let searchMode = 'graph'; // 'graph' or 'doc'
 let graphFilter = null; // { visibleIds: Set, highlightedIds: Set } or null
+const HIDDEN_DOC_IDS = new Set(['M2a6d47IcocGT5x5GyEc1EA3nzc']); // Add doc IDs to hide from sidebar/search/graph
 const DEEPSEEK_API_KEY = 'sk-09caa3f74c0d40' + '89977853b1a9165814';
 
 function setSearchMode(mode) {
@@ -1141,6 +1142,7 @@ async function loadData() {
 }
 
 function isFolderDoc(doc) {
+  if (doc.hasChild) return true; // sync.js marks folders
   if (!doc.content) return true;
   const body = doc.content.replace(/^#+\s+.*$/gm, '').trim();
   return body.length === 0;
@@ -1171,13 +1173,20 @@ function buildDocTree() {
     return;
   }
   container.innerHTML = '';
-  // Count real docs (non-folder, with content)
-  const realDocCount = data.documents.filter(d => d.content && !d.isFolder).length;
+  // Count real docs (non-folder, with content, not hidden)
+  const realDocCount = data.documents.filter(d => d.content && !d.isFolder && !HIDDEN_DOC_IDS.has(d.id)).length;
   const expandAll = realDocCount < 15;
   data.tree.forEach(root => renderTreeNode(root, container, 0, expandAll));
 }
 
 function renderTreeNode(node, parent, depth, expandAll) {
+  // Filter hidden docs
+  if (HIDDEN_DOC_IDS.has(node.id)) {
+    // Still render children (in case children aren't hidden)
+    if (node.children) node.children.forEach(child => renderTreeNode(child, parent, depth, expandAll));
+    return;
+  }
+
   const div = document.createElement('div');
   div.className = 'tree-item';
   div.style.paddingLeft = (20 + depth * 16) + 'px';
@@ -1348,7 +1357,7 @@ function showGraphForDoc(docId) {
 // ============================================================
 function renderHomepage() {
   const area = document.getElementById('contentArea');
-  const visibleCount = graphFilter ? graphFilter.visibleIds.size : data.graph.nodes.length;
+  const visibleCount = graphFilter ? graphFilter.visibleIds.size : data.graph.nodes.filter(n => !HIDDEN_DOC_IDS.has(n.id)).length;
   const highlightedCount = graphFilter ? graphFilter.highlightedIds.size : 0;
   const filterHint = graphFilter
     ? `<div class="graph-hint" style="color:var(--accent);font-weight:600;">🔍 筛选模式：显示 ${visibleCount} 个节点（${highlightedCount} 个匹配）</div>`
@@ -1361,7 +1370,7 @@ function renderHomepage() {
       </div>
       ${filterHint}
       <div class="stats">
-        <div class="stat"><div class="num">${data.documents.length}</div><div class="label">文档</div></div>
+        <div class="stat"><div class="num">${data.documents.filter(d => !HIDDEN_DOC_IDS.has(d.id)).length}</div><div class="label">文档</div></div>
         <div class="stat"><div class="num">${data.graph.edges.length}</div><div class="label">链接</div></div>
         <div class="stat"><div class="num">${data.tree.length}</div><div class="label">分类</div></div>
       </div>
@@ -1481,6 +1490,7 @@ function drawGraph() {
     const sp = positions[edge.source];
     const tp = positions[edge.target];
     if (!sp || !tp) continue;
+    if (HIDDEN_DOC_IDS.has(edge.source) || HIDDEN_DOC_IDS.has(edge.target)) continue;
 
     const line = document.createElementNS(svgNS, 'line');
     line.setAttribute('x1', sp.x);
@@ -1506,6 +1516,7 @@ function drawGraph() {
   // Draw nodes
   const nodeEls = [];
   for (const [id, pos] of Object.entries(positions)) {
+    if (HIDDEN_DOC_IDS.has(id)) continue;
     const g = document.createElementNS(svgNS, 'g');
     g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
 
@@ -1739,7 +1750,7 @@ function renderDocPage(docId) {
     return;
   }
 
-  const backlinks = data.backlinks[docId] || [];
+  const backlinks = (data.backlinks[docId] || []).filter(bl => !HIDDEN_DOC_IDS.has(bl.id));
   const tags = doc.tags || [];
 
   // Convert markdown to HTML
@@ -1748,9 +1759,10 @@ function renderDocPage(docId) {
   // Extract TOC from headings
   const toc = extractTOC(doc.content);
 
-  // Linkify known document titles
+  // Linkify known document titles (skip hidden)
   for (const d of data.documents) {
     if (d.id === docId) continue;
+    if (HIDDEN_DOC_IDS.has(d.id)) continue;
     const title = escRegex(d.title);
     const regex = new RegExp(`(${title})`, 'g');
     html = html.replace(regex, (match, p1) => {
@@ -2105,6 +2117,7 @@ function handleGraphSearch(q) {
   const matchingIds = new Set();
   const results = [];
   for (const doc of data.documents) {
+    if (HIDDEN_DOC_IDS.has(doc.id)) continue;
     if (doc.title.toLowerCase().includes(q) || doc.content.toLowerCase().includes(q)) {
       matchingIds.add(doc.id);
       results.push(doc);
@@ -2164,6 +2177,7 @@ function handleDocSearch(q) {
   const results = [];
 
   for (const doc of data.documents) {
+    if (HIDDEN_DOC_IDS.has(doc.id)) continue;
     const titleMatch = fuzzyMatch(doc.title.toLowerCase(), q);
     const contentMatch = fuzzyMatch(doc.content.toLowerCase(), q);
 
@@ -2289,6 +2303,7 @@ function buildRagIndex() {
   ragChunks = [];
   for (const doc of data.documents) {
     if (doc.isFolder) continue;
+    if (HIDDEN_DOC_IDS.has(doc.id)) continue;
     let content = doc.content;
     if (content.trim().startsWith('<')) {
       content = content.replace(/<title>.*?<\/title>/g, '').replace(/<[^>]+>/g, '\n');
